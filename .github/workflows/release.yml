@@ -1,0 +1,59 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            artifact: dist/atmos.exe
+            asset_name: atmos-windows-x86_64.exe
+          - os: ubuntu-latest
+            artifact: dist/atmos
+            asset_name: atmos-linux-x86_64
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ./atmos[build]
+
+      - name: Build with PyInstaller
+        # build.py writes the artifact to dist/ at the repo root,
+        # not to atmos/dist/. Run from the repo root so the build
+        # script's own HERE/REPO layout is correct on the runner.
+        run: python atmos/build.py
+
+      - name: Verify artifact
+        shell: bash
+        run: |
+          ls -la "${{ matrix.artifact }}"
+          "${{ matrix.artifact }}" --version
+
+      - name: Upload artifact (workflow run)
+        uses: actions/upload-artifact@v4
+        with:
+          name: atmos-${{ matrix.os }}
+          path: ${{ matrix.artifact }}
+          if-no-files-found: error
+
+      - name: Attach to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ matrix.artifact }}
+          fail_on_unmatched_files: true

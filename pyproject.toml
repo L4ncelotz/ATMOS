@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+version = "1.0.0"
+authors = [
+    { name = "Estellez" }
+]
+description = "Ambient weather for your terminal."
+requires-python = ">=3.12"
+dependencies = [
+    "rich>=13.7",
+    "blessed>=1.20",
+    "pydantic>=2.6",
+    "httpx>=0.27",
+    "platformdirs>=4.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+[project.urls]
+Homepage = "https://github.com/L4ncelotz/ATMOS"
+Repository = "https://github.com/L4ncelotz/ATMOS"
+Issues = "https://github.com/L4ncelotz/ATMOS/issues"
+
+[project.scripts]
+atmos = "atmos.app:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-ra"

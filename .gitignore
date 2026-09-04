@@ -1,0 +1,41 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+build/
+dist/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+
+# --- Virtualenvs ---
+.venv/
+venv/
+env/
+ENV/
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# --- Logs / local state ---
+*.log
+.env
+.env.*
+!.env.example
+
+# --- Local config (keep config.toml template under source control) ---
+config.toml
+atmos.log
