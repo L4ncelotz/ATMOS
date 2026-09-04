@@ -54,8 +54,16 @@ jobs:
           path: ${{ matrix.artifact }}
           if-no-files-found: error
 
+      - name: Stage renamed asset
+        # softprops/action-gh-release uses the on-disk filename as
+        # the asset name. Copy the built artifact to the canonical
+        # release filename before the release step picks it up.
+        shell: bash
+        run: cp "${{ matrix.artifact }}" "${{ matrix.asset_name }}"
+
       - name: Attach to GitHub Release
         uses: softprops/action-gh-release@v3
         with:
-          files: ${{ matrix.artifact }}
+          name: ATMOS ${{ github.ref_name }} — First Public Preview
+          files: ${{ matrix.asset_name }}
           fail_on_unmatched_files: true
