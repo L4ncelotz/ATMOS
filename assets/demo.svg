@@ -1,38 +1,130 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  ATMOS static demo. Replace this file with a real terminal recording
-  (asciinema, ttyrec -> .gif) when one is available. The SVG keeps
-  the README from showing a broken image link in the meantime and
-  shows the rain scene in roughly the same layout as a TUI render.
+  ATMOS static demo, four scenes.
+  This file is a fallback until a real terminal recording (e.g. an
+  asciinema or ttyrec-to-gif capture) lands at assets/demo.gif.
+  Each panel is a separate <g> with a header line, particles or
+  motifs, and a footer hint. No rasterization, no animation, no
+  embedded bitmaps.
 -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 320" width="800" height="320" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="16" shape-rendering="crispEdges">
-  <rect x="0" y="0" width="800" height="320" fill="#0b0b0b"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 640" width="1200" height="640"
+     font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+     font-size="14" shape-rendering="crispEdges">
+  <style>
+    .hdr { fill: #e5e5e5; }
+    .sub { fill: #aaaaaa; }
+    .dim { fill: #777777; }
+    .rain { fill: #7aa2f7; }
+    .storm { fill: #c0d8ff; }
+    .snow { fill: #ffffff; }
+    .star { fill: #ffffff; }
+    .moon { fill: #f0f0d8; }
+    .bolt { fill: #fff7a8; }
+  </style>
 
-  <!-- Header: BANGKOK | time -->
-  <text x="20" y="32" fill="#e5e5e5">BANGKOK</text>
-  <text x="680" y="32" fill="#e5e5e5">21:42</text>
+  <rect x="0" y="0" width="1200" height="640" fill="#0b0b0b"/>
 
-  <!-- Rain particles (│ ╵ |) -->
-  <g fill="#7aa2f7">
-    <text x="220" y="100">│</text>
-    <text x="320" y="120">│</text>
-    <text x="400" y="80">│</text>
-    <text x="180" y="160">│</text>
-    <text x="280" y="180">│</text>
-    <text x="360" y="200">│</text>
-    <text x="460" y="140">│</text>
-    <text x="540" y="120">│</text>
-    <text x="620" y="100">│</text>
+  <!-- =========== Panel 1: Rain (Bangkok 21:42) — top-left =========== -->
+  <g transform="translate(0,0)">
+    <rect x="0" y="0" width="600" height="320" fill="#0b0b0b"/>
+    <text x="20" y="32" class="hdr">BANGKOK</text>
+    <text x="500" y="32" class="hdr">21:42</text>
+    <g class="rain">
+      <text x="180" y="90">│</text>
+      <text x="240" y="120">│</text>
+      <text x="320" y="80">│</text>
+      <text x="380" y="140">│</text>
+      <text x="440" y="100">╲</text>
+      <text x="500" y="160">│</text>
+    </g>
+    <text x="240" y="220" class="hdr" font-size="28">29°</text>
+    <text x="240" y="248" class="sub">rain</text>
+    <text x="20" y="290" class="sub">humidity 78%</text>
+    <text x="400" y="290" class="sub">wind 14 km/h</text>
+    <text x="20" y="310" class="dim">scene: rain — precipitation drives density</text>
   </g>
 
-  <!-- Big temp + condition -->
-  <text x="380" y="240" fill="#ffffff" font-size="32">29°</text>
-  <text x="380" y="265" fill="#cccccc" font-size="16">rain</text>
+  <!-- =========== Panel 2: Clear night (Tokyo 02:15) — top-right =========== -->
+  <g transform="translate(600,0)">
+    <rect x="0" y="0" width="600" height="320" fill="#0b0b0b"/>
+    <text x="20" y="32" class="hdr">TOKYO</text>
+    <text x="500" y="32" class="hdr">02:15</text>
+    <g class="star">
+      <text x="80"  y="80">*</text>
+      <text x="160" y="60">·</text>
+      <text x="220" y="100">*</text>
+      <text x="320" y="70">·</text>
+      <text x="400" y="90">*</text>
+      <text x="480" y="60">·</text>
+      <text x="540" y="100">*</text>
+      <text x="120" y="150">*</text>
+      <text x="260" y="160">·</text>
+      <text x="360" y="140">*</text>
+      <text x="500" y="170">*</text>
+    </g>
+    <text x="280" y="160" class="moon" font-size="36">●</text>
+    <text x="20" y="220" class="hdr" font-size="28">8°</text>
+    <text x="20" y="248" class="sub">clear · night</text>
+    <text x="20" y="290" class="sub">humidity 42%</text>
+    <text x="400" y="290" class="sub">wind 6 km/h</text>
+    <text x="20" y="310" class="dim">scene: clear — night phase, stars visible</text>
+  </g>
 
-  <!-- Status row -->
-  <text x="20" y="300" fill="#cccccc">humidity 78%</text>
-  <text x="540" y="300" fill="#cccccc">wind 14 km/h</text>
+  <!-- =========== Panel 3: Storm (Manila 18:50) — bottom-left =========== -->
+  <g transform="translate(0,320)">
+    <rect x="0" y="0" width="600" height="320" fill="#0b0b0b"/>
+    <text x="20" y="32" class="hdr">MANILA</text>
+    <text x="500" y="32" class="hdr">18:50</text>
+    <g class="storm">
+      <text x="120" y="80">╲</text>
+      <text x="200" y="100">│</text>
+      <text x="270" y="90">╱</text>
+      <text x="340" y="110">╲</text>
+      <text x="420" y="100">│</text>
+      <text x="490" y="120">╲</text>
+      <text x="170" y="160">╲</text>
+      <text x="300" y="170">│</text>
+      <text x="380" y="180">╱</text>
+      <text x="450" y="170">╲</text>
+    </g>
+    <g class="bolt">
+      <text x="280" y="80">╲</text>
+      <text x="290" y="100">│</text>
+      <text x="300" y="120">╱</text>
+      <text x="295" y="140">╲</text>
+    </g>
+    <text x="240" y="220" class="hdr" font-size="28">26°</text>
+    <text x="240" y="248" class="sub">storm</text>
+    <text x="20" y="290" class="sub">humidity 92%</text>
+    <text x="400" y="290" class="sub">wind 28 km/h</text>
+    <text x="20" y="310" class="dim">scene: storm — heavy rain + randomized lightning</text>
+  </g>
 
-  <!-- Frame label -->
-  <text x="20" y="312" fill="#666666" font-size="12">ATMOS — by Estellez</text>
+  <!-- =========== Panel 4: Snow (Reykjavik 11:00) — bottom-right =========== -->
+  <g transform="translate(600,320)">
+    <rect x="0" y="0" width="600" height="320" fill="#0b0b0b"/>
+    <text x="20" y="32" class="hdr">REYKJAVIK</text>
+    <text x="500" y="32" class="hdr">11:00</text>
+    <g class="snow">
+      <text x="100" y="80">·</text>
+      <text x="180" y="100">*</text>
+      <text x="260" y="90">+</text>
+      <text x="340" y="110">·</text>
+      <text x="420" y="100">*</text>
+      <text x="500" y="120">+</text>
+      <text x="140" y="160">*</text>
+      <text x="220" y="180">·</text>
+      <text x="300" y="170">+</text>
+      <text x="380" y="190">*</text>
+      <text x="460" y="180">·</text>
+      <text x="200" y="220">*</text>
+      <text x="350" y="240">·</text>
+      <text x="450" y="250">+</text>
+    </g>
+    <text x="240" y="220" class="hdr" font-size="28">-3°</text>
+    <text x="240" y="248" class="sub">snow</text>
+    <text x="20" y="290" class="sub">humidity 88%</text>
+    <text x="400" y="290" class="sub">wind 12 km/h</text>
+    <text x="20" y="310" class="dim">scene: snow — drift, varied fall speed</text>
+  </g>
 </svg>

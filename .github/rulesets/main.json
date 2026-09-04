@@ -1,0 +1,49 @@
+{
+  "_doc": "ATMOS branch protection ruleset for main. See rulesets/README.md for import instructions. The 'required_status_checks' contexts reference job names that ci.yml and release.yml create on GitHub; if they don't match a real run, the ruleset will block every merge. Verify the job names after the first CI run lands.",
+  "name": "main-protection",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": {
+    "ref_name": {
+      "include": ["refs/heads/main"],
+      "exclude": []
+    }
+  },
+  "rules": [
+    {
+      "type": "deletion"
+    },
+    {
+      "type": "non_fast_forward"
+    },
+    {
+      "type": "required_linear_history"
+    },
+    {
+      "type": "pull_request",
+      "parameters": {
+        "require_code_owner_review": false,
+        "require_last_push_approval": false,
+        "dismiss_stale_reviews_on_push": true,
+        "required_approving_review_count": 0,
+        "required_review_thread_resolution": true,
+        "required_signatures": [],
+        "allowed_merge_methods": ["squash"]
+      }
+    },
+    {
+      "type": "required_status_checks",
+      "parameters": {
+        "strict_required_status_checks_policy": false,
+        "required_status_checks": [
+          {
+            "context": "test (ubuntu-latest, 3.12)"
+          },
+          {
+            "context": "test (windows-latest, 3.12)"
+          }
+        ]
+      }
+    }
+  ]
+}

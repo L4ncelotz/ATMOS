@@ -15,9 +15,8 @@ that lives in your terminal.
 
 ## Preview
 
-> A real terminal capture lands here as `assets/demo.gif`. Until
-> then, `assets/demo.svg` is a static approximation.
-<img src="assets/demo.svg" alt="ATMOS rain scene" width="600">
+<img src="assets/demo.svg" alt="ATMOS — four scenes (rain, clear night, storm, snow)" width="800">
+
 
 ```text
 BANGKOK                                       21:42
