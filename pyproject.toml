@@ -3,7 +3,8 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-version = "1.0.0"
+name = "atmos"
+version = "0.2.0"
 authors = [
     { name = "Estellez" }
 ]
@@ -19,6 +20,8 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
+build = ["pyinstaller>=6"]
+
 [project.urls]
 Homepage = "https://github.com/L4ncelotz/ATMOS"
 Repository = "https://github.com/L4ncelotz/ATMOS"

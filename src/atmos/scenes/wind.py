@@ -1,6 +1,6 @@
 """Wind scene: directional streaks moving fast horizontally.
 
-Per IMPLEMENT.md §Wind:
+Visual:
        ────────→
              ─────────────→
         ─────→

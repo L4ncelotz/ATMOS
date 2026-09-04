@@ -1,15 +1,16 @@
 """Build a standalone atmos binary via PyInstaller.
 
-Run from the repo root or atmos/:
-    pip install -e .[build]
-    python atmos/build.py
+Run from the repo root:
+    pip install -e ".[build]"
+    python build.py
 
 Output:
     dist/atmos.exe      (Windows)
     dist/atmos          (Linux / macOS; +x)
 
-The console subsystem is required on Windows so blessed receives keystrokes.
-This is not a hidden-window app; users run it from a real terminal.
+The console subsystem is required on Windows so blessed receives
+keystrokes. This is not a hidden-window app; users run it from a
+real terminal.
 """
 
 from __future__ import annotations
@@ -21,9 +22,11 @@ import sys
 from pathlib import Path
 
 
-HERE = Path(__file__).resolve().parent
-REPO = HERE.parent
-DIST = REPO / "dist"
+# build.py lives at the repo root, so ROOT is the directory holding
+# build.py. The binary is written to ROOT/dist/.
+ROOT = Path(__file__).resolve().parent
+DIST = ROOT / "dist"
+ENTRY = ROOT / "src" / "atmos" / "app.py"
 
 
 def _is_windows() -> bool:
@@ -41,9 +44,8 @@ def build(clean: bool = True) -> Path:
 
     if clean and DIST.exists():
         shutil.rmtree(DIST)
-
     args: list[str] = [
-        str(HERE / "src" / "atmos" / "app.py"),
+        str(ENTRY),
         "--name=atmos",
         "--onefile",
         "--noupx",
@@ -51,6 +53,9 @@ def build(clean: bool = True) -> Path:
         "--collect-submodules=atmos",
         "--console",
         "--log-level=WARN",
+        # Pin output paths so behavior is independent of cwd.
+        f"--distpath={DIST}",
+        f"--workpath={ROOT / 'build'}",
     ]
     try:
         pyi_main.run(args)

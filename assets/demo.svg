@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ATMOS static demo. Replace this file with a real terminal recording
+  (asciinema, ttyrec -> .gif) when one is available. The SVG keeps
+  the README from showing a broken image link in the meantime and
+  shows the rain scene in roughly the same layout as a TUI render.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 320" width="800" height="320" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="16" shape-rendering="crispEdges">
+  <rect x="0" y="0" width="800" height="320" fill="#0b0b0b"/>
+
+  <!-- Header: BANGKOK | time -->
+  <text x="20" y="32" fill="#e5e5e5">BANGKOK</text>
+  <text x="680" y="32" fill="#e5e5e5">21:42</text>
+
+  <!-- Rain particles (│ ╵ |) -->
+  <g fill="#7aa2f7">
+    <text x="220" y="100">│</text>
+    <text x="320" y="120">│</text>
+    <text x="400" y="80">│</text>
+    <text x="180" y="160">│</text>
+    <text x="280" y="180">│</text>
+    <text x="360" y="200">│</text>
+    <text x="460" y="140">│</text>
+    <text x="540" y="120">│</text>
+    <text x="620" y="100">│</text>
+  </g>
+
+  <!-- Big temp + condition -->
+  <text x="380" y="240" fill="#ffffff" font-size="32">29°</text>
+  <text x="380" y="265" fill="#cccccc" font-size="16">rain</text>
+
+  <!-- Status row -->
+  <text x="20" y="300" fill="#cccccc">humidity 78%</text>
+  <text x="540" y="300" fill="#cccccc">wind 14 km/h</text>
+
+  <!-- Frame label -->
+  <text x="20" y="312" fill="#666666" font-size="12">ATMOS — by Estellez</text>
+</svg>

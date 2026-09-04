@@ -1,6 +1,6 @@
 """Rain scene: density + speed + lean from real weather values.
 
-Per IMPLEMENT.md §V3:
+Behavior:
   precipitation → particle density (linear from 5 → 180 across precip 0..6mm)
   precipitation → fall speed (12..28 cells/sec across precip 0..6mm)
   wind_speed + wind_direction → particle vx (no hard cap, scaled)

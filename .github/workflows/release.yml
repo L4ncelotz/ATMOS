@@ -31,13 +31,13 @@ jobs:
       - name: Install build dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ./atmos[build]
+          pip install -e ".[build]"
 
       - name: Build with PyInstaller
-        # build.py writes the artifact to dist/ at the repo root,
-        # not to atmos/dist/. Run from the repo root so the build
-        # script's own HERE/REPO layout is correct on the runner.
-        run: python atmos/build.py
+        # build.py writes the artifact to dist/ relative to its own
+        # location (the repo root on CI), pinned via --distpath so
+        # the caller's working directory does not matter.
+        run: python build.py
 
       - name: Verify artifact
         shell: bash

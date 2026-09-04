@@ -4,10 +4,9 @@
 
 > Ambient weather for your terminal.
 
-The animation reflects the weather.
-velocity, cloud coverage sets the cloud bands, and the local sun
-position sets the day/night phase. The labels at the bottom of the
-screen are a reference, not the point.
+Real weather drives the animation: precipitation controls rain
+density, wind affects particle velocity, cloud coverage shapes the
+sky, and local time controls the day/night cycle.
 
 ATMOS is not another weather CLI. It is a calm ambient experience
 that lives in your terminal.
@@ -15,6 +14,10 @@ that lives in your terminal.
 ---
 
 ## Preview
+
+> A real terminal capture lands here as `assets/demo.gif`. Until
+> then, `assets/demo.svg` is a static approximation.
+<img src="assets/demo.svg" alt="ATMOS rain scene" width="600">
 
 ```text
 BANGKOK                                       21:42
@@ -30,35 +33,16 @@ BANGKOK                                       21:42
 humidity 78%                        wind 14 km/h
 ```
 
-A real terminal capture can replace the block above; drop a
-`cast`/`gif` into `assets/` and link it from here.
-
 ---
 
 ## What is ATMOS?
 
-ATMOS fetches a real forecast, normalizes it into an internal
+ATMOS fetches a live forecast, normalizes it into an internal
 `WeatherState`, and feeds the relevant values into a particle
 simulator and a small scene engine. The scene engine renders into a
 2D character grid; the grid is diffed against the previous frame and
 emitted as ANSI cursor moves so the terminal itself looks like it
 has weather.
-
-```text
-Open-Meteo
-    ↓
-WeatherProvider
-    ↓
-WeatherState
-    ↓
-Scene mapper
-    ↓
-Scene engine (Clear, Rain, Storm, Snow, Fog, …)
-    ↓
-Frame buffer (run-length diff)
-    ↓
-Terminal
-```
 
 The terminal stays calm even when the weather outside isn't.
 
@@ -91,7 +75,7 @@ The terminal stays calm even when the weather outside isn't.
 
 ### Simulation
 
-Real values drive the scene. The mapping:
+Real values drive the scene:
 
 | Weather value    | Drives                                       |
 |------------------|----------------------------------------------|
@@ -135,7 +119,7 @@ retry" and never invents data.
 | Open-Meteo    | Weather and geocoding provider (no API key)         |
 | platformdirs  | Cross-platform config, cache, and log paths        |
 | PyInstaller   | Standalone executables                              |
-| GitHub Actions| Build and release automation                       |
+| GitHub Actions| Build, test, and release automation               |
 
 ---
 
@@ -157,9 +141,17 @@ scene code.
                     WeatherProvider
                             │
                             ▼
-```bash
-git clone https://github.com/L4ncelotz/ATMOS
-cd ATMOS
+                      WeatherState
+                            │
+             ┌──────────────┼──────────────┐
+             ▼              ▼              ▼
+        Scene Mapper      Forecast        Cache
+             │
+             ▼
+         Scene Engine
+             │
+      ┌──────┼────────┐
+      ▼      ▼        ▼
  Particle  Layout  Transition
   Engine   Engine    Engine
       │      │        │
@@ -188,12 +180,13 @@ git clone https://github.com/L4ncelotz/ATMOS
 cd ATMOS
 python -m venv .venv
 
-# Windows
+# Windows (PowerShell or cmd)
 .venv\Scripts\activate
+
 # Linux / macOS
 source .venv/bin/activate
 
-pip install -e .
+pip install -e ".[dev]"
 atmos
 ```
 
@@ -215,7 +208,7 @@ macOS is not part of the CI matrix; build it locally with
 ### Local binary build
 
 ```bash
-pip install -e .[build]
+pip install -e ".[build]"
 python build.py
 # -> dist/atmos.exe (Windows) or dist/atmos (POSIX, +x)
 ```
@@ -348,6 +341,7 @@ ATMOS should not become:
 [x] Continuous local time
 [x] Async geocoding
 [x] Scene transition blending
+[x] Core test suite
 [ ] macOS binary in CI
 [ ] Optional sound (disabled by default)
 ```
@@ -370,10 +364,15 @@ ATMOS should not become:
 
 ## Development
 
+Install dev dependencies:
+
+```bash
+pip install -e ".[dev]"
+```
+
 Run from source:
 
 ```bash
-pip install -e .[dev]
 atmos
 # or
 python -m atmos
@@ -388,7 +387,7 @@ pytest
 Build a binary:
 
 ```bash
-pip install -e .[build]
+pip install -e ".[build]"
 python build.py
 ```
 
@@ -411,15 +410,9 @@ interpreter.
 
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Run the test suite (`pytest`)
-5. Commit with a clear message
-6. Open a pull request
-
-The project keeps its contribution surface small on purpose.
-Open an issue before sending large changes.
+See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the short guide. The
+project keeps its contribution surface small on purpose — open an
+issue before sending large changes.
 
 ---
 

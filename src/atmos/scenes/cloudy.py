@@ -1,6 +1,6 @@
 """Cloudy scene: 2-5 horizontal cloud bands drifting with wind.
 
-Per IMPLEMENT.md §V3:
+Behavior:
   cloud_coverage → band count (0-100% maps to 0-5 bands)
   cloud_coverage → band width (higher coverage → wider bands)
   wind_speed + wind_direction → drift

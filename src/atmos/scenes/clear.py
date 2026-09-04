@@ -1,6 +1,6 @@
 """Clear scene: sun arc + drifting motes + stars at night + rare shooting stars.
 
-Per IMPLEMENT.md §Clear and §V5 Ambient Experience.
+See README.md "Features → Scenes" for the visual specification.
 """
 
 from __future__ import annotations
