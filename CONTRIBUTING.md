@@ -21,6 +21,9 @@ the approach can be discussed first.
 Tested on Windows 10+, Linux, and macOS. Python 3.12 or newer
 is required.
 
+Cross-platform block:
+
+
 ```bash
 # Clone
 git clone https://github.com/L4ncelotz/ATMOS
@@ -28,10 +31,6 @@ cd ATMOS
 
 # Virtualenv (cross-platform)
 python -m venv .venv
-
-# Windows (PowerShell or cmd)
-.venv\Scripts\activate
-# Linux / macOS
 source .venv/bin/activate
 
 # Install with dev + build extras
@@ -43,6 +42,12 @@ atmos
 python -m atmos
 ```
 
+Windows (PowerShell or cmd) only — replace the `source` line
+above with the line below in its own fence:
+
+```powershell
+.venv\Scripts\activate
+```
 You should see a weather scene within a couple of seconds. If
 nothing renders, your terminal probably does not support the
 alt-screen escape; see [README § Known Limitations](./README.md#known-limitations).

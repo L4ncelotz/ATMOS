@@ -168,26 +168,33 @@ The rule:
 > directly by the rendering system. Provider data must first be
 > normalized into internal models such as `WeatherState`.
 
----
 
 ## Installation
 
 ### From source
 
+Cross-platform — same instructions on every OS. The
+Windows-only line is shown in its own block so Markdown
+renderers do not split the backslash.
+
 ```bash
 git clone https://github.com/L4ncelotz/ATMOS
 cd ATMOS
 python -m venv .venv
-
-# Windows (PowerShell or cmd)
-.venv\Scripts\activate
-
-# Linux / macOS
 source .venv/bin/activate
-
 pip install -e ".[dev]"
 atmos
 ```
+
+Windows (PowerShell or cmd):
+
+```powershell
+.venv\Scripts\activate
+```
+
+> The `# Windows` comment is a hint, not a literal shell command.
+> Run the block above; the Windows activate path shown below is
+> the only Windows-specific line.
 
 ### Standalone binary
 
