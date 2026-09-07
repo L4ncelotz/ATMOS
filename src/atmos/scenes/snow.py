@@ -1,7 +1,7 @@
 """Snow scene: slow falling particles with lateral drift and varied speeds.
 
 Chars: · * + (visual convention: small motes, asterisks, plus marks).
-Vertical velocity 1.5..4.5 cells/sec.
+Vertical velocity 1.5..4.5 cells/sec for a gentle ambient fall.
 vx jitter so the field doesn't look uniform.
 """
 

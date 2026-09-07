@@ -36,7 +36,7 @@ def init_stars(stars: Stars, density: int, width: int, height: int, seed: str) -
         return
     rng = random.Random(seed)
     upper = max(2, int(height * 0.6))
-    chars = ("·", "*", "·", "·")  # mostly dim dots
+    chars = ("·", "·", "✦", "✧", "*")
     stars.points = []
     for _ in range(density):
         x = rng.uniform(0, max(1, width - 1))
@@ -47,16 +47,20 @@ def init_stars(stars: Stars, density: int, width: int, height: int, seed: str) -
 
 
 def draw_stars(buf: FrameBuffer, stars: Stars, time_s: float, style: str = "white") -> None:
-    """Draw stars; gentle twinkle by varying the cell style.
+    """Draw a restrained, colored star field with slow twinkling."""
+    import math
 
-    We don't actually swap styles (that would flicker terminal output); we
-    just keep them as bright_white. Twinkle is implicit via the time_s
-    angle, but not used here to keep the renderer stable.
-    """
-    for x, y, ch, _twinkle in stars.points:
+    for x, y, ch, twinkle in stars.points:
         ix, iy = int(x), int(y)
         if 0 <= ix < buf.width and 0 <= iy < buf.height:
-            buf.set(iy, ix, ch, style)
+            pulse = math.sin(time_s * 1.4 + twinkle)
+            if ch == "✦":
+                star_style = "bright_yellow" if pulse > -0.2 else "bright_white"
+            elif ch in ("✧", "*"):
+                star_style = "bright_white" if pulse > 0.2 else "white"
+            else:
+                star_style = "blue" if pulse < -0.65 else style
+            buf.set(iy, ix, ch, star_style)
 
 
 def draw_sun(buf: FrameBuffer, lighting: LightingState, center_x: int) -> None:
@@ -77,10 +81,9 @@ def draw_sun(buf: FrameBuffer, lighting: LightingState, center_x: int) -> None:
 
 
 def moon_glyph_for(lighting: LightingState) -> str:
-    """Pick a moon glyph. V5 keeps it simple — full moon at midnight."""
+    """Pick a moon glyph that reads as a moon instead of a plain dot."""
     if lighting.phase in (LightingPhase.NIGHT, LightingPhase.TWILIGHT):
-        # Twilight: crescent; full NIGHT: full moon.
-        return "●" if lighting.phase == LightingPhase.NIGHT else "◐"
+        return "◐" if lighting.phase == LightingPhase.NIGHT else "◑"
     if lighting.phase in (LightingPhase.SUNRISE, LightingPhase.SUNSET):
         return "◐"
     return ""
@@ -98,9 +101,14 @@ def draw_moon(buf: FrameBuffer, lighting: LightingState, center_x: int) -> None:
         LightingPhase.EVENING,
     ):
         return
+    glyph = moon_glyph_for(lighting)
     if not glyph:
         return
     # Place moon in upper third of screen.
     y = max(2, buf.height // 4)
     if 0 <= center_x < buf.width and 0 <= y < buf.height:
-        buf.set(y, center_x, glyph, "white")
+        # A dim halo gives the moon some separation from the star field.
+        for dx in (-2, 2):
+            if 0 <= center_x + dx < buf.width:
+                buf.set(y, center_x + dx, "·", "blue")
+        buf.set(y, center_x, glyph, "bright_yellow")

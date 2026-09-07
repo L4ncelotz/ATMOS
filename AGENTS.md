@@ -78,8 +78,13 @@ atmos
 atmos Bangkok
 atmos Tokyo --minimal
 atmos --fps 20
+atmos --demo snow
 atmos --version
 ```
+
+`--demo` accepts each normalized scene condition (`clear`, `partly_cloudy`,
+`cloudy`, `rain`, `heavy_rain`, `storm`, `snow`, `fog`, `wind`) and runs
+without network access.
 
 For packaging changes:
 
@@ -109,4 +114,3 @@ Network failures should be tested with a fake provider or monkeypatch; tests mus
 ## Product boundaries
 
 ATMOS is intentionally a calm ambient terminal experience. Keep it minimal, atmospheric, keyboard-first, and terminal-native. Do not turn it into a dashboard, weather website, analytics application, or AI assistant. Known limitations include no sound implementation, no macOS CI release artifact, and varying terminal compatibility.
-

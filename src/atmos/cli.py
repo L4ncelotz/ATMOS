@@ -19,11 +19,24 @@ from dataclasses import dataclass, replace
 from atmos import __version__ as _atmos_version
 from atmos.config import DEFAULTS, load
 
+DEMO_CONDITIONS = (
+    "clear",
+    "partly_cloudy",
+    "cloudy",
+    "rain",
+    "heavy_rain",
+    "storm",
+    "snow",
+    "fog",
+    "wind",
+)
+
 
 @dataclass
 class CliArgs:
     location_override: str | None
     config: Config
+    demo_condition: str | None
 
 
 def parse(argv: list[str] | None = None) -> CliArgs:
@@ -52,7 +65,12 @@ def parse(argv: list[str] | None = None) -> CliArgs:
         default=DEFAULTS.fps,
         help="target FPS (5-60)",
     )
-
+    parser.add_argument(
+        "--demo",
+        choices=DEMO_CONDITIONS,
+        metavar="CONDITION",
+        help="run a local visual demo without contacting the weather API",
+    )
 
     ns = parser.parse_args(argv)
     cfg = load()
@@ -63,5 +81,8 @@ def parse(argv: list[str] | None = None) -> CliArgs:
             sys.stderr.write(f"atmos: ignoring --fps {ns.fps} (must be 5..60)\n")
     if ns.minimal:
         cfg = replace(cfg, minimal=True)
-    return CliArgs(location_override=ns.location, config=cfg)
-
+    return CliArgs(
+        location_override=ns.location,
+        config=cfg,
+        demo_condition=ns.demo,
+    )

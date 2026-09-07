@@ -55,6 +55,72 @@ def test_action_letters_have_single_source_of_truth() -> None:
         assert action_for_char(ch) == "unknown"
 
 
+@pytest.mark.parametrize(
+    ("key", "expected"),
+    [
+        ("q", "quit"),
+        ("r", "refresh"),
+        ("f", "forecast"),
+        ("l", "location"),
+        ("h", "help"),
+        ("m", "minimal"),
+    ],
+)
+def test_documented_letter_shortcuts_map_to_actions(key: str, expected: str) -> None:
+    from atmos.engine.input import _parse, action_for_char
+
+    event = _parse(key)
+    assert event.action == "char"
+    assert event.char == key
+    assert action_for_char(key) == expected
+
+
+def test_documented_non_letter_shortcuts_map_to_actions() -> None:
+    from atmos.engine.input import _parse
+
+    assert _parse(" ").action == "space"
+    assert _parse("+").action == "plus"
+    assert _parse("=").action == "plus"
+    assert _parse("-").action == "minus"
+    assert _parse("_").action == "minus"
+
+
+def test_cli_demo_accepts_all_scene_conditions() -> None:
+    from atmos.cli import DEMO_CONDITIONS, parse
+
+    for condition in DEMO_CONDITIONS:
+        assert parse(["--demo", condition]).demo_condition == condition
+
+
+def test_global_shortcuts_change_loop_state() -> None:
+    from atmos.app import _handle_global
+    from atmos.engine.input import KeyEvent
+
+    class FakeLoop:
+        target_fps = 30
+        stopped = False
+
+        def stop(self) -> None:
+            self.stopped = True
+
+    class FakeRefresher:
+        refresh_requested = False
+
+        def request_refresh(self) -> None:
+            self.refresh_requested = True
+
+    loop = FakeLoop()
+    refresher = FakeRefresher()
+    _handle_global(KeyEvent("plus"), loop=loop, refresher=refresher)
+    assert loop.target_fps == 35
+    _handle_global(KeyEvent("minus"), loop=loop, refresher=refresher)
+    assert loop.target_fps == 30
+    _handle_global(KeyEvent("refresh"), loop=loop, refresher=refresher)
+    assert refresher.refresh_requested is True
+    _handle_global(KeyEvent("quit"), loop=loop, refresher=refresher)
+    assert loop.stopped is True
+
+
 # --- night-phase bug (regression: 0 stars between sunset and midnight) ---
 
 
@@ -101,6 +167,20 @@ def test_post_sunset_phase_progression() -> None:
     # 18:00 (before sunset) -> SUNSET
     ls = compute_lighting(_state(datetime(2026, 9, 3, 18, 0, 0), sunset))
     assert ls.phase == LightingPhase.SUNSET
+
+
+def test_moon_draw_uses_phase_glyph() -> None:
+    from atmos.engine.frame_buffer import FrameBuffer
+    from atmos.engine.lighting import LightingPhase, LightingState
+    from atmos.scenes._atmosphere import draw_moon
+
+    buf = FrameBuffer.empty(20, 10)
+    draw_moon(
+        buf,
+        LightingState(phase=LightingPhase.NIGHT, sun_visible=False),
+        center_x=10,
+    )
+    assert buf.get(2, 10) == ("◐", "bright_yellow")
 
 
 # --- config round-trip (regression: cfg never loaded; --minimal ignored) ---
@@ -311,6 +391,33 @@ def test_heavy_rain_caps_at_300_particles() -> None:
     assert len(scene.rain.particles) <= 300
 
 
+def test_snow_particles_fall_visibly() -> None:
+    from atmos.scenes.snow import SnowScene
+    from atmos.weather.models import WeatherState
+
+    state = WeatherState(
+        location_name="London",
+        country_code="GB",
+        temperature=1.0,
+        feels_like=-2.0,
+        humidity=90,
+        wind_speed=8.0,
+        wind_direction=180.0,
+        precipitation=0.0,
+        precipitation_probability=90.0,
+        cloud_coverage=95.0,
+        condition="snow",
+        local_time=datetime(2026, 1, 7, 10, 0, 0),
+    )
+    scene = SnowScene()
+    scene.enter(state)
+    scene.update(0.0, state, 80, 24)
+    before = scene.system.particles[0].y
+    scene.update(0.2, state, 80, 24)
+    assert any(p.y > before for p in scene.system.particles)
+    assert all(1.5 <= p.vy <= 4.5 for p in scene.system.particles)
+
+
 # --- smoke: the app entry point imports without NameError ---
 
 
@@ -321,3 +428,78 @@ def test_app_entry_point_imports_required_names() -> None:
     assert hasattr(app_mod, "InputManager")
     assert hasattr(app_mod, "KeyEvent")
     assert hasattr(app_mod, "is_action_char")
+
+
+# --- weather companion (new ambient detail) ---
+
+
+def test_weather_companion_uses_weather_specific_sprite() -> None:
+    from atmos.engine.companion import WeatherCompanion
+
+    companion = WeatherCompanion(x=10)
+    companion.update(0.1, 80, "heavy_rain")
+    assert companion.kind == "rain"
+
+    old_x = companion.x
+    companion.update(1.0, 80, "heavy_rain", paused=True)
+    assert companion.x == old_x
+
+
+@pytest.mark.parametrize(
+    ("condition", "clothing_mark"),
+    [("rain", "#"), ("snow", "#"), ("wind", "="), ("fog", "-")],
+)
+def test_weather_companion_clothing_matches_weather(
+    condition: str, clothing_mark: str
+) -> None:
+    from atmos.engine.companion import WeatherCompanion
+    from atmos.engine.frame_buffer import FrameBuffer
+
+    companion = WeatherCompanion(x=10)
+    companion.update(0.1, 80, condition)
+    buf = FrameBuffer.empty(80, 24)
+    companion.draw(buf, floor_y=18)
+    rendered = "".join(char for row in buf.cells for char, _ in row)
+    assert clothing_mark in rendered
+
+
+def test_weather_companion_draws_into_frame_buffer() -> None:
+    from atmos.engine.companion import WeatherCompanion
+    from atmos.engine.frame_buffer import FrameBuffer
+
+    companion = WeatherCompanion(x=10)
+    companion.update(0.1, 80, "snow")
+    buf = FrameBuffer.empty(80, 24)
+    companion.draw(buf, floor_y=18)
+    assert any(
+        char != " " and style == "bright_white"
+        for row in buf.cells
+        for char, style in row
+    )
+
+
+def test_partly_cloudy_draws_sprite_cells_not_entire_rows() -> None:
+    from atmos.engine.frame_buffer import FrameBuffer
+    from atmos.scenes.partly_cloudy import PartlyCloudyScene
+    from atmos.weather.models import WeatherState
+
+    state = WeatherState(
+        location_name="Seattle",
+        country_code="US",
+        temperature=17.0,
+        feels_like=17.0,
+        humidity=66,
+        wind_speed=7.0,
+        wind_direction=180.0,
+        precipitation=0.0,
+        precipitation_probability=10.0,
+        cloud_coverage=45.0,
+        condition="partly_cloudy",
+        local_time=datetime(2026, 9, 7, 21, 0, 0),
+    )
+    scene = PartlyCloudyScene()
+    scene.enter(state)
+    scene.update(0.0, state, 80, 24)
+    buf = FrameBuffer.empty(80, 24)
+    scene.draw(buf)
+    assert all(len(char) == 1 for row in buf.cells for char, _ in row)

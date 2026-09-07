@@ -72,13 +72,13 @@ class PartlyCloudyScene(SceneBase):
         upper = max(4, int(height * 0.55))
         positions = [upper // 3, (upper * 2) // 3] if count >= 2 else [upper // 2]
         for y in positions[:count]:
-            length, chars = _band(width, coverage, self._rng)
+            length, sprite = _band(width, coverage, self._rng)
             self.bands.append(
                 {
                     "x": self._rng.uniform(-length, max(1, width - 1)),
                     "y": y,
                     "length": length,
-                    "chars": chars,
+                    "sprite": sprite,
                 }
             )
 
@@ -106,10 +106,13 @@ class PartlyCloudyScene(SceneBase):
             y = b["y"]
             if y < 0 or y >= buf.height:
                 continue
-            for i, ch in enumerate(b["chars"]):
-                x = start_x + i
-                if 0 <= x < buf.width:
-                    buf.set(y, x, ch, cloud_style)
+            for row, line in enumerate(b["sprite"]):
+                if y + row >= buf.height:
+                    break
+                for i, ch in enumerate(line):
+                    x = start_x + i
+                    if ch != " " and 0 <= x < buf.width:
+                        buf.set(y + row, x, ch, cloud_style)
 
     def exit(self) -> None:
         self.bands = []
