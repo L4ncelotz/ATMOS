@@ -8,6 +8,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Weather-aware ASCII companion that walks through the scene and changes
+  clothing for rain, snow, wind, fog, and clear weather.
+- `--demo CONDITION` CLI mode for deterministic, offline previews of all
+  normalized weather scenes.
+- Colored star fields with gentle twinkling and a visible crescent moon.
+- Shortcut, companion, scene-rendering, and demo-mode regression coverage;
+  the suite now contains 32 tests.
+
+### Changed
+- Cloud formations now render as layered multi-row sprites with atmospheric
+  depth instead of single-line bands.
+- Snowfall remains slow and ambient while still advancing between frames.
+- Terminal input uses cbreak mode so typed keys are consumed by ATMOS rather
+  than echoed into the animation.
+
+### Fixed
+- Moon rendering no longer raises `NameError` during clear night scenes.
+- Partly-cloudy scenes correctly draw multi-row cloud sprites.
+- Location search no longer raises `UnboundLocalError` inside the animation
+  loop.
+
 ## [0.2.0] — 2026-09-04
 
 ### Added
