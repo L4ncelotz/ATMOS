@@ -1,4 +1,4 @@
-"""Cloudy scene: 2-5 horizontal cloud bands drifting with wind.
+"""Cloudy scene: layered, puffy cloud formations drifting with wind.
 
 Behavior:
   cloud_coverage → band count (0-100% maps to 0-5 bands)
@@ -12,27 +12,50 @@ import math
 import random
 
 from atmos.engine.frame_buffer import FrameBuffer
+from atmos.engine.lighting import LightingPhase, LightingState
 from atmos.scenes.base import SceneBase
 from atmos.weather.models import WeatherState
 
 
 def _band(width: int, coverage: float, rng: random.Random) -> tuple[int, list[str]]:
-    """Return (length, chars) for one band. Width scales with coverage."""
+    """Return (length, sprite rows) for one cloud formation.
+
+    The old implementation drew a single row of ``~`` characters. A cloud
+    now has a few overlapping puffs and a broad underside, while retaining a
+    variable width driven by cloud coverage.
+    """
     min_len = max(6, width // 5)
     max_len = max(min_len + 4, int(width * 0.85))
     # Scale max length by coverage; at 100% we get the full 85% width.
     scaled_max = int(min_len + (max_len - min_len) * (coverage / 100.0))
     length = rng.randint(min_len, max(min_len + 1, scaled_max))
-    chars: list[str] = []
-    for _ in range(length):
-        r = rng.random()
-        if r < 0.85:
-            chars.append("~")
-        elif r < 0.95:
-            chars.append("─")
-        else:
-            chars.append(".")
-    return length, chars
+    length = max(16, length)
+    rows = [[" "] * length for _ in range(4)]
+    puff_count = max(2, min(5, length // 10))
+    centers = [
+        int((i + 0.5) * length / puff_count + rng.randint(-2, 2))
+        for i in range(puff_count)
+    ]
+
+    def paint(row: int, center: int, text: str) -> None:
+        start = center - len(text) // 2
+        for offset, char in enumerate(text):
+            x = start + offset
+            if 0 <= x < length:
+                rows[row][x] = char
+
+    for center in centers:
+        paint(0, center, ".--.")
+        paint(1, center, ".-(    )-.")
+        paint(2, center, "(        )")
+
+    # A continuous underside makes the separate puffs read as one cloud.
+    rows[3][0] = "("
+    rows[3][-1] = ")"
+    for x in range(1, length - 1):
+        rows[3][x] = "_"
+
+    return length, ["".join(row) for row in rows]
 
 
 class CloudyScene(SceneBase):
@@ -68,30 +91,66 @@ class CloudyScene(SceneBase):
 
     def _init_bands(self, count: int, width: int, height: int, coverage: float) -> None:
         self.bands = []
-        upper = max(3, int(height * 0.55))
+        upper = max(4, int(height * 0.55))
         for i in range(count):
-            length, chars = _band(width, coverage, self._rng)
-            y = max(2, (upper * (i + 1)) // (count + 1))
+            length, sprite = _band(width, coverage, self._rng)
+            # Keep the formations inside the upper sky and leave enough
+            # vertical separation for their four sprite rows.
+            available = max(1, upper - 4)
+            y = 2 + (available * i) // max(1, count - 1)
             self.bands.append(
                 {
                     "x": self._rng.uniform(-length, max(1, width - 1)),
                     "y": y,
                     "length": length,
-                    "chars": chars,
+                    "sprite": sprite,
                 }
             )
 
-    def draw(self, buf: FrameBuffer, lighting: "LightingState | None" = None, dim: float = 1.0) -> None:
-        style = "white" if dim >= 1.0 else "240"
-        for b in self.bands:
+    @staticmethod
+    def _palette(
+        lighting: LightingState | None, layer: int, dim: float
+    ) -> tuple[str, str, str, str]:
+        """Return styles for cloud top, puffs, body, and underside."""
+        if dim < 1.0:
+            return ("240", "240", "240", "240")
+
+        phase = lighting.phase if lighting is not None else LightingPhase.DAY
+        if phase in (LightingPhase.SUNSET, LightingPhase.SUNRISE):
+            palette = ("bright_yellow", "yellow", "white", "240")
+        elif phase in (
+            LightingPhase.NIGHT,
+            LightingPhase.TWILIGHT,
+            LightingPhase.EVENING,
+        ):
+            palette = ("bright_blue", "blue", "blue", "240")
+        else:
+            palette = ("bright_white", "white", "blue", "white")
+
+        # Higher clouds sit farther away and are slightly quieter.
+        if layer % 2:
+            return (palette[1], palette[2], palette[2], palette[3])
+        return palette
+
+    def draw(
+        self,
+        buf: FrameBuffer,
+        lighting: LightingState | None = None,
+        dim: float = 1.0,
+    ) -> None:
+        for layer, b in enumerate(self.bands):
             start_x = int(b["x"])
             y = b["y"]
             if y < 0 or y >= buf.height:
                 continue
-            for i, ch in enumerate(b["chars"]):
-                x = start_x + i
-                if 0 <= x < buf.width:
-                    buf.set(y, x, ch, style)
+            for row, line in enumerate(b["sprite"]):
+                if y + row >= buf.height:
+                    break
+                for i, ch in enumerate(line):
+                    x = start_x + i
+                    if ch != " " and 0 <= x < buf.width:
+                        style = self._palette(lighting, layer, dim)[row]
+                        buf.set(y + row, x, ch, style)
 
     def exit(self) -> None:
         self.bands = []
