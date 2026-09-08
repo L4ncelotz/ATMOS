@@ -412,10 +412,15 @@ interpreter.
 
 ## Contributing
 
-See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the short guide. The
-project keeps its contribution surface small on purpose — open an
-issue before sending large changes.
+ATMOS uses a `develop`-based branching workflow:
 
+```text
+main     → stable / release
+develop  → next-release integration
+feat/*   → individual changes
+```
+
+Normal development PRs target `develop`. See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for full instructions and branch guidelines.
 ---
 
 ## License
