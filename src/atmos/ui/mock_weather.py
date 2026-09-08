@@ -73,3 +73,57 @@ MOCK: dict[str, WeatherState] = {
         local_time=_NOON,
     ),
 }
+
+# Additional presets used by the local `--demo` CLI mode. They intentionally
+# stay deterministic so every scene can be reviewed without a network call.
+MOCK.update(
+    {
+        "partly_cloudy": MOCK["cloudy"].model_copy(
+            update={
+                "temperature": 31.0,
+                "feels_like": 33.0,
+                "cloud_coverage": 42.0,
+                "condition": "partly_cloudy",
+            }
+        ),
+        "heavy_rain": MOCK["rain"].model_copy(
+            update={
+                "temperature": 27.0,
+                "feels_like": 29.0,
+                "precipitation": 8.0,
+                "cloud_coverage": 98.0,
+                "condition": "heavy_rain",
+            }
+        ),
+        "snow": WeatherState(
+            location_name="Oslo",
+            country_code="NO",
+            temperature=-2.0,
+            feels_like=-7.0,
+            humidity=88,
+            wind_speed=12.0,
+            wind_direction=240.0,
+            precipitation=1.5,
+            precipitation_probability=90.0,
+            cloud_coverage=94.0,
+            condition="snow",
+            local_time=_NOON,
+        ),
+        "fog": MOCK["cloudy"].model_copy(
+            update={
+                "temperature": 20.0,
+                "humidity": 96,
+                "cloud_coverage": 100.0,
+                "condition": "fog",
+            }
+        ),
+        "wind": MOCK["clear"].model_copy(
+            update={
+                "temperature": 24.0,
+                "wind_speed": 32.0,
+                "wind_direction": 270.0,
+                "condition": "wind",
+            }
+        ),
+    }
+)
