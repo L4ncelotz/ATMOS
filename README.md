@@ -224,11 +224,17 @@ atmos                       # last used or configured location
 atmos Bangkok               # one-off location query
 atmos Tokyo --minimal       # start in minimal mode
 atmos --fps 20              # target animation frame rate
+atmos --demo rain           # local visual demo (no network)
 atmos --version             # print version and exit
 atmos --help                # full flag list
 ```
 
 `--forecast` was removed; forecast is accessible in-app via `F`.
+
+For scene development or screenshots, `--demo` accepts `clear`,
+`partly_cloudy`, `cloudy`, `rain`, `heavy_rain`, `storm`, `snow`, `fog`,
+or `wind`. Demo mode uses deterministic local weather and does not contact
+Open-Meteo.
 
 ---
 

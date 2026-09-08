@@ -29,8 +29,14 @@ import time
 from atmos import __version__
 from atmos.config import Config, update_resolved_location
 from atmos.engine.animation import AnimationLoop
+from atmos.engine.companion import WeatherCompanion
 from atmos.engine.frame_buffer import FrameBuffer
-from atmos.engine.input import InputManager, KeyEvent, is_action_char
+from atmos.engine.input import (
+    InputManager,
+    KeyEvent,
+    action_for_char,
+    is_action_char,
+)
 from atmos.engine.layout import LayoutManager
 from atmos.engine.lighting import LightingState, compute_lighting
 from atmos.engine.terminal import TerminalContext
@@ -51,6 +57,7 @@ from atmos.ui.location_search import (
     draw_location_search,
     max_results,
 )
+from atmos.ui.mock_weather import MOCK
 from atmos.ui.overlay import draw_header, draw_info, draw_status
 from atmos.utils.time import local_now
 from atmos.weather.cache import read_forecast_for, read_for_location
@@ -187,20 +194,45 @@ def _draw_minimal_status(buf: FrameBuffer, lay, state: WeatherState) -> None:
 
 
 def _handle_global(
-    key: KeyEvent | None, *, loop: AnimationLoop, refresher: WeatherRefresher
+    key: KeyEvent | None,
+    *,
+    loop: AnimationLoop,
+    refresher: WeatherRefresher,
+    allow_network: bool = True,
+    allow_action_chars: bool = True,
 ) -> bool:
     if key is None:
         return False
-    if key.action == "quit":
+
+    action = key.action
+    if (
+        allow_action_chars
+        and action == "char"
+        and key.char is not None
+    ):
+        action = action_for_char(key.char.lower())
+
+    if action == "quit":
         loop.stop()
         return True
-    if key.action == "plus":
+    if action == "plus":
         loop.target_fps = min(60, loop.target_fps + 5)
-    elif key.action == "minus":
+    elif action == "minus":
         loop.target_fps = max(5, loop.target_fps - 5)
-    elif key.action == "refresh":
+    elif action == "refresh" and allow_network:
         refresher.request_refresh()
+
     return False
+
+
+def _activate_location_search(search: LocationSearchState, *, demo: bool) -> bool:
+    """Open location search unless the local, network-free demo is active."""
+    if demo:
+        return False
+    search.active = True
+    search.last_input_at = time.monotonic()
+    search.results = []
+    return True
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -225,11 +257,27 @@ def main(argv: list[str] | None = None) -> int:
     location: Location | None
     offline_reason: str | None
     try:
-        state, forecast, location, offline_reason = _resolve_initial(
-            cfg,
-            location_override=args.location_override,
-            provider=provider,
-        )
+        if args.demo_condition is not None:
+            demo_condition = args.demo_condition
+            state = MOCK[demo_condition].model_copy(
+                update={"location_name": f"DEMO / {demo_condition.upper()}"}
+            )
+            forecast = []
+            location = Location(
+                name="Demo",
+                country="ATMOS",
+                latitude=13.7563,
+                longitude=100.5018,
+                timezone="Asia/Bangkok",
+            )
+            offline_reason = None
+            log.info("starting local demo condition=%s", demo_condition)
+        else:
+            state, forecast, location, offline_reason = _resolve_initial(
+                cfg,
+                location_override=args.location_override,
+                provider=provider,
+            )
         if state is None or location is None:
             log.warning(
                 "no weather available; entering retry loop. last_reason=%s",
@@ -268,6 +316,7 @@ def main(argv: list[str] | None = None) -> int:
             forecast,
             location,
             offline_reason,
+            demo=args.demo_condition is not None,
         )
 def _run_ambient_loop(
     term,
@@ -278,6 +327,8 @@ def _run_ambient_loop(
     forecast: list[ForecastDay],
     location: Location,
     offline_reason: str | None,
+    *,
+    demo: bool = False,
 ) -> int:
 
     inp = InputManager(term)
@@ -301,6 +352,7 @@ def _run_ambient_loop(
     layout_mgr = LayoutManager(term)
     geocode_worker = GeocodeWorker()
     transition = SceneTransition(duration_s=2.5)
+    companion = WeatherCompanion(x=-8.0)
 
 
     refresher = WeatherRefresher(
@@ -309,25 +361,25 @@ def _run_ambient_loop(
         interval_s=float(cfg.refresh_minutes) * 60.0,
         forecast_days=5,
     )
-    refresher.start()
+    if not demo:
+        refresher.start()
 
     try:
         def step(dt: float) -> None:
             nonlocal scene_name, scene, offline, current_state, current_forecast
             nonlocal current_location, last_offline_msg, current_lighting
-            nonlocal mode, paused, minimal, prev_buf, transition
+            nonlocal mode, paused, minimal, prev_buf, transition, search
             key = inp.read(dt)
 
             if key is not None:
-                if key.action == "quit":
-                    loop.stop()
+                if _handle_global(
+                    key,
+                    loop=loop,
+                    refresher=refresher,
+                    allow_network=not demo,
+                    allow_action_chars=mode != Mode.LOCATION,
+                ):
                     return
-                if key.action == "plus":
-                    loop.target_fps = min(60, loop.target_fps + 5)
-                elif key.action == "minus":
-                    loop.target_fps = max(5, loop.target_fps - 5)
-                elif key.action == "refresh":
-                    refresher.request_refresh()
                 elif key.action == "space":
                     if mode != Mode.LOCATION:
                         paused = not paused
@@ -340,10 +392,8 @@ def _run_ambient_loop(
                     elif ch == "h":
                         mode = Mode.HELP
                     elif ch == "l":
-                        mode = Mode.LOCATION
-                        search = LocationSearchState(active=True)
-                        search.last_input_at = time.monotonic()
-                        search.results = []
+                        if _activate_location_search(search, demo=demo):
+                            mode = Mode.LOCATION
                     elif ch == "m":
                         minimal = not minimal
 
@@ -362,10 +412,8 @@ def _run_ambient_loop(
                         if ch == "f":
                             mode = Mode.FORECAST
                         elif ch == "l":
-                            mode = Mode.LOCATION
-                            search = LocationSearchState(active=True)
-                            search.last_input_at = time.monotonic()
-                            search.results = []
+                            if _activate_location_search(search, demo=demo):
+                                mode = Mode.LOCATION
                         elif ch == "m":
                             minimal = not minimal
 
@@ -375,7 +423,7 @@ def _run_ambient_loop(
                 elif key.action == "esc":
                     mode = Mode.AMBIENT
                 elif key.action == "enter":
-                    if search.results:
+                    if not demo and search.results:
                         idx = max(0, min(len(search.results) - 1, search.highlight))
                         new_loc = search.results[idx]
                         update_resolved_location(new_loc)
@@ -429,6 +477,12 @@ def _run_ambient_loop(
                 update={"local_time": local_now(current_location)}
             )
             current_lighting = compute_lighting(effective_state)
+            companion.update(
+                dt,
+                lay.width,
+                effective_state.condition,
+                paused=paused or mode != Mode.AMBIENT,
+            )
             if transition.active:
                 if transition.from_scene is not None and transition.to_scene is not None:
                     transition.from_scene.update(
@@ -460,6 +514,8 @@ def _run_ambient_loop(
                     transition.to_scene.draw(buf, current_lighting, dim=to_w)
                 else:
                     scene.draw(buf, current_lighting, dim=1.0)
+                if not minimal and lay.height >= 21:
+                    companion.draw(buf, floor_y=lay.status_y - 2)
                 draw_info(buf, lay, effective_state)
                 if not minimal:
                     draw_status(buf, lay, effective_state)
@@ -574,11 +630,12 @@ def _run_no_data_loop(
         key = inp.read(0.05)
         if key is None:
             continue
-        if key.action == "quit":
+        action = key.action
+        if action == "char" and key.char is not None:
+            action = action_for_char(key.char.lower())
+        if action == "quit":
             return 0
-        if key.action == "refresh" or (
-            key.action == "char" and (key.char or "").lower() == "r"
-        ):
+        if action == "refresh":
             state, forecast, location, reason = _resolve_initial(
                 cfg,
                 location_override=None,
