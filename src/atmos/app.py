@@ -189,7 +189,11 @@ def _draw_minimal_status(buf: FrameBuffer, lay, state: WeatherState) -> None:
 
 
 def _handle_global(
-    key: KeyEvent | None, *, loop: AnimationLoop, refresher: WeatherRefresher
+    key: KeyEvent | None,
+    *,
+    loop: AnimationLoop,
+    refresher: WeatherRefresher,
+    allow_network: bool = True,
 ) -> bool:
     if key is None:
         return False
@@ -200,9 +204,19 @@ def _handle_global(
         loop.target_fps = min(60, loop.target_fps + 5)
     elif key.action == "minus":
         loop.target_fps = max(5, loop.target_fps - 5)
-    elif key.action == "refresh":
+    elif key.action == "refresh" and allow_network:
         refresher.request_refresh()
     return False
+
+
+def _activate_location_search(search: LocationSearchState, *, demo: bool) -> bool:
+    """Open location search unless the local, network-free demo is active."""
+    if demo:
+        return False
+    search.active = True
+    search.last_input_at = time.monotonic()
+    search.results = []
+    return True
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -342,15 +356,13 @@ def _run_ambient_loop(
             key = inp.read(dt)
 
             if key is not None:
-                if key.action == "quit":
-                    loop.stop()
+                if _handle_global(
+                    key,
+                    loop=loop,
+                    refresher=refresher,
+                    allow_network=not demo,
+                ):
                     return
-                if key.action == "plus":
-                    loop.target_fps = min(60, loop.target_fps + 5)
-                elif key.action == "minus":
-                    loop.target_fps = max(5, loop.target_fps - 5)
-                elif key.action == "refresh":
-                    refresher.request_refresh()
                 elif key.action == "space":
                     if mode != Mode.LOCATION:
                         paused = not paused
@@ -363,10 +375,8 @@ def _run_ambient_loop(
                     elif ch == "h":
                         mode = Mode.HELP
                     elif ch == "l":
-                        mode = Mode.LOCATION
-                        search = LocationSearchState(active=True)
-                        search.last_input_at = time.monotonic()
-                        search.results = []
+                        if _activate_location_search(search, demo=demo):
+                            mode = Mode.LOCATION
                     elif ch == "m":
                         minimal = not minimal
 
@@ -385,10 +395,8 @@ def _run_ambient_loop(
                         if ch == "f":
                             mode = Mode.FORECAST
                         elif ch == "l":
-                            mode = Mode.LOCATION
-                            search = LocationSearchState(active=True)
-                            search.last_input_at = time.monotonic()
-                            search.results = []
+                            if _activate_location_search(search, demo=demo):
+                                mode = Mode.LOCATION
                         elif ch == "m":
                             minimal = not minimal
 
@@ -398,7 +406,7 @@ def _run_ambient_loop(
                 elif key.action == "esc":
                     mode = Mode.AMBIENT
                 elif key.action == "enter":
-                    if search.results:
+                    if not demo and search.results:
                         idx = max(0, min(len(search.results) - 1, search.highlight))
                         new_loc = search.results[idx]
                         update_resolved_location(new_loc)

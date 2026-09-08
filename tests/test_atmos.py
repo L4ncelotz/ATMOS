@@ -158,6 +158,37 @@ def test_global_shortcuts_change_loop_state() -> None:
     assert loop.stopped is True
 
 
+def test_demo_disables_network_shortcuts() -> None:
+    from atmos.app import _activate_location_search, _handle_global
+    from atmos.engine.input import KeyEvent
+    from atmos.ui.location_search import LocationSearchState
+
+    class FakeLoop:
+        target_fps = 30
+
+        def stop(self) -> None:
+            pass
+
+    class FakeRefresher:
+        refresh_requested = False
+
+        def request_refresh(self) -> None:
+            self.refresh_requested = True
+
+    refresher = FakeRefresher()
+    _handle_global(
+        KeyEvent("refresh"),
+        loop=FakeLoop(),
+        refresher=refresher,
+        allow_network=False,
+    )
+    assert refresher.refresh_requested is False
+
+    search = LocationSearchState()
+    assert _activate_location_search(search, demo=True) is False
+    assert search.active is False
+
+
 # --- night-phase bug (regression: 0 stars between sunset and midnight) ---
 
 
