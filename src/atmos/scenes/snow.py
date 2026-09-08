@@ -22,6 +22,7 @@ _SNOW_CHARS = ("·", "*", "+")
 class SnowScene(SceneBase):
     def __init__(self) -> None:
         self.system = ParticleSystem()
+        self.accumulation: list[float] = []
         self.width = 0
         self.height = 0
         self.spawn_cooldown = 0.0
@@ -30,11 +31,34 @@ class SnowScene(SceneBase):
     def enter(self, weather: WeatherState) -> None:
         self.weather = weather
         self.system.clear()
+        self.accumulation = []
         self._rng = random.Random(weather.location_name + "_snow")
-
     def update(self, dt: float, weather: WeatherState, width: int, height: int, lighting: "LightingState | None" = None) -> None:
         self.width = width
         self.height = height
+
+        # Ensure ground accumulation array matches current width
+        if len(self.accumulation) != width:
+            self.accumulation = [0.0] * width
+
+        # Detect snow landing on the ground to build accumulation
+        ground_y = max(0, height - 1)
+        for p in self.system.particles:
+            if p.y + p.vy * dt >= ground_y and 0 <= p.x < width:
+                col = int(p.x)
+                if 0 <= col < width:
+                    self.accumulation[col] = min(1.0, self.accumulation[col] + 0.12)
+                    if col > 0:
+                        self.accumulation[col - 1] = min(1.0, self.accumulation[col - 1] + 0.03)
+                    if col < width - 1:
+                        self.accumulation[col + 1] = min(1.0, self.accumulation[col + 1] + 0.03)
+
+        # Slow decay / settling over time
+        decay = dt * 0.015
+        for i in range(len(self.accumulation)):
+            if self.accumulation[i] > 0.0:
+                self.accumulation[i] = max(0.0, self.accumulation[i] - decay)
+
         self.system.step(dt, width, height)
 
         rad = math.radians(weather.wind_direction)
@@ -70,5 +94,17 @@ class SnowScene(SceneBase):
         style = "white" if dim >= 1.0 else "240"
         self.system.draw(buf, style)
 
+        # Ground snow accumulation
+        if buf.height > 0 and self.accumulation:
+            ground_row = buf.height - 1
+            for x, depth in enumerate(self.accumulation[:buf.width]):
+                if depth >= 0.65:
+                    buf.set(ground_row, x, "_", style)
+                elif depth >= 0.35:
+                    buf.set(ground_row, x, ".", style)
+                elif depth >= 0.1:
+                    buf.set(ground_row, x, "·", style)
+
     def exit(self) -> None:
         self.system.clear()
+        self.accumulation = []

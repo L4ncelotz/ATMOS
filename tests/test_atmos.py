@@ -802,3 +802,145 @@ def test_partly_cloudy_parallax_layers() -> None:
 
     scene.update(1.0, state, 80, 24)
     assert distant_band["x"] < foreground_band["x"]
+
+
+def test_rain_ground_ripples_spawn_and_render() -> None:
+    from atmos.engine.frame_buffer import FrameBuffer
+    from atmos.engine.particles import Particle
+    from atmos.scenes.rain import RainScene
+    from atmos.weather.models import WeatherState
+
+    state = WeatherState(
+        location_name="Portland",
+        country_code="US",
+        temperature=15.0,
+        feels_like=15.0,
+        humidity=85,
+        wind_speed=10.0,
+        wind_direction=180.0,
+        precipitation=4.0,
+        precipitation_probability=90.0,
+        cloud_coverage=80.0,
+        condition="rain",
+        local_time=datetime(2026, 9, 8, 14, 0, 0),
+    )
+    scene = RainScene()
+    scene.enter(state)
+    scene.update(0.0, state, 80, 24)
+
+    # Place particles hitting the ground
+    for i in range(10):
+        scene.system.spawn(
+            Particle(x=float(10 + i * 5), y=23.0, vx=0.0, vy=10.0, age=0.0, lifetime=2.0, char="│")
+        )
+    scene.update(0.05, state, 80, 24)
+    assert len(scene.ripples) > 0
+
+    buf = FrameBuffer.empty(80, 24)
+    scene.draw(buf)
+    ground_chars = {buf.cells[23][x][0] for x in range(80)}
+    assert any(ch in ("·", "(", ")", "~") for ch in ground_chars)
+
+
+def test_heavy_rain_splashes_and_ripples() -> None:
+    from atmos.engine.frame_buffer import FrameBuffer
+    from atmos.engine.particles import Particle
+    from atmos.scenes.heavy_rain import HeavyRainScene
+    from atmos.weather.models import WeatherState
+
+    state = WeatherState(
+        location_name="Miami",
+        country_code="US",
+        temperature=27.0,
+        feels_like=30.0,
+        humidity=92,
+        wind_speed=15.0,
+        wind_direction=180.0,
+        precipitation=8.0,
+        precipitation_probability=95.0,
+        cloud_coverage=95.0,
+        condition="heavy_rain",
+        local_time=datetime(2026, 9, 8, 16, 0, 0),
+    )
+    scene = HeavyRainScene()
+    scene.enter(state)
+    scene.update(0.0, state, 80, 24)
+
+    # Spawn particles at the floor row
+    for i in range(15):
+        scene.rain.spawn(
+            Particle(x=float(5 + i * 4), y=23.0, vx=0.0, vy=30.0, age=0.0, lifetime=1.0, char="│")
+        )
+    scene.update(0.02, state, 80, 24)
+    assert len(scene.splash.particles) > 0 or len(scene.ripples) > 0
+    assert len(scene.splash.particles) <= 45
+
+    buf = FrameBuffer.empty(80, 24)
+    scene.draw(buf)
+    assert len(buf.cells) == 24
+
+
+def test_snow_ground_accumulation() -> None:
+    from atmos.engine.frame_buffer import FrameBuffer
+    from atmos.engine.particles import Particle
+    from atmos.scenes.snow import SnowScene
+    from atmos.weather.models import WeatherState
+
+    state = WeatherState(
+        location_name="Sapporo",
+        country_code="JP",
+        temperature=-3.0,
+        feels_like=-7.0,
+        humidity=88,
+        wind_speed=5.0,
+        wind_direction=180.0,
+        precipitation=2.0,
+        precipitation_probability=85.0,
+        cloud_coverage=90.0,
+        condition="snow",
+        local_time=datetime(2026, 1, 15, 12, 0, 0),
+    )
+    scene = SnowScene()
+    scene.enter(state)
+    scene.update(0.0, state, 80, 24)
+
+    # Drop a snowflake onto column 30
+    scene.system.spawn(
+        Particle(x=30.0, y=23.0, vx=0.0, vy=2.0, age=0.0, lifetime=5.0, char="*")
+    )
+    scene.update(0.05, state, 80, 24)
+    assert scene.accumulation[30] > 0.0
+
+    buf = FrameBuffer.empty(80, 24)
+    scene.draw(buf)
+    assert buf.cells[23][30][0] in ("·", ".", "_")
+
+
+def test_wind_ambient_debris_spawns_and_moves() -> None:
+    from atmos.scenes.wind import WindScene, _DEBRIS_CHARS
+    from atmos.weather.models import WeatherState
+
+    state = WeatherState(
+        location_name="Chicago",
+        country_code="US",
+        temperature=18.0,
+        feels_like=18.0,
+        humidity=50,
+        wind_speed=35.0,
+        wind_direction=90.0,
+        precipitation=0.0,
+        precipitation_probability=0.0,
+        cloud_coverage=10.0,
+        condition="wind",
+        local_time=datetime(2026, 9, 8, 14, 0, 0),
+    )
+    scene = WindScene()
+    scene.enter(state)
+    scene.update(0.1, state, 80, 24)
+
+    assert len(scene.debris) > 0
+    assert all(d["char"] in _DEBRIS_CHARS for d in scene.debris)
+
+    x0 = scene.debris[0]["x"]
+    scene.update(0.2, state, 80, 24)
+    assert scene.debris[0]["x"] != x0
