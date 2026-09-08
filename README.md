@@ -15,7 +15,7 @@ that lives in your terminal.
 
 ## Preview
 
-<img src="assets/demo.svg" alt="ATMOS — four scenes (rain, clear night, storm, snow)" width="800">
+<img src="assets/demo.gif" alt="ATMOS — four scenes (rain, clear night, storm, snow)" width="800">
 
 
 ```text
@@ -191,10 +191,6 @@ Windows (PowerShell or cmd):
 ```powershell
 .venv\Scripts\activate
 ```
-
-> The `# Windows` comment is a hint, not a literal shell command.
-> Run the block above; the Windows activate path shown below is
-> the only Windows-specific line.
 
 ### Standalone binary
 
