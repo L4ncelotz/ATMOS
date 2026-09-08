@@ -11,6 +11,7 @@ from __future__ import annotations
 import math
 import random
 
+from atmos.engine.environment import EnvironmentState
 from atmos.engine.frame_buffer import FrameBuffer
 from atmos.engine.layers import Layer
 from atmos.engine.lighting import LightingPhase, LightingState
@@ -79,8 +80,9 @@ class CloudyScene(SceneBase):
         # Clouds drift a bit faster than scene visualization but slower than rain.
         drift = math.sin(rad) * (weather.wind_speed / 12.0)
 
-        # Coverage → number of bands (0..5).
-        target_bands = max(0, min(5, int(weather.cloud_coverage / 20.0)))
+        # Environment state cloud intensity → number of bands (0..5).
+        env = EnvironmentState.from_weather(weather)
+        target_bands = max(0, min(5, int(env.cloud_intensity * 5.0)))
         if not self.bands or len(self.bands) != target_bands:
             self._init_bands(target_bands, width, height, weather.cloud_coverage)
         for b in self.bands:

@@ -11,6 +11,7 @@ from __future__ import annotations
 import math
 import random
 
+from atmos.engine.environment import EnvironmentState
 from atmos.engine.frame_buffer import FrameBuffer
 from atmos.engine.layers import Layer
 from atmos.scenes.base import SceneBase
@@ -37,8 +38,10 @@ class FogScene(SceneBase):
         rad = math.radians(weather.wind_direction)
         drift = math.sin(rad) * max(0.4, weather.wind_speed / 25.0)
 
-        # Coverage → number + thickness of layers.
-        target = max(3, min(8, int(weather.cloud_coverage / 12)))
+        # Environment state → number + thickness of layers.
+        env = EnvironmentState.from_weather(weather)
+        fog_density = env.fog_intensity if env.fog_intensity > 0 else env.cloud_intensity
+        target = max(3, min(8, int(fog_density * 8)))
         if not self.layers or len(self.layers) != target:
             self._init_layers(target, width, height)
         for layer in self.layers:

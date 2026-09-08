@@ -709,6 +709,27 @@ def test_environment_state_initialized_from_weather() -> None:
     fog_env = EnvironmentState.from_weather(fog_weather)
     assert fog_env.fog_intensity == pytest.approx(0.9)
 
+    # High-value extreme weather: normalization must clamp all values to <= 1.0
+    extreme_weather = WeatherState(
+        location_name="Typhoon Zone",
+        country_code="PH",
+        temperature=28.0,
+        feels_like=35.0,
+        humidity=100,
+        wind_speed=150.0,
+        wind_direction=270.0,
+        precipitation=75.0,
+        precipitation_probability=100.0,
+        cloud_coverage=120.0,
+        condition="fog",
+        local_time=datetime(2026, 9, 7, 12, 0, 0),
+    )
+    extreme_env = EnvironmentState.from_weather(extreme_weather)
+    assert extreme_env.cloud_intensity == 1.0
+    assert extreme_env.precipitation_intensity == 1.0
+    assert extreme_env.wind_intensity == 1.0
+    assert extreme_env.fog_intensity == 1.0
+
 
 def test_cloud_bands_move_at_different_speeds() -> None:
     from atmos.scenes.cloudy import CloudyScene
@@ -739,3 +760,45 @@ def test_cloud_bands_move_at_different_speeds() -> None:
     scene.update(1.0, state, 80, 24)
     assert scene.bands[0]["layer"].speed < scene.bands[-1]["layer"].speed
     assert scene.bands[0]["x"] < scene.bands[-1]["x"]
+
+
+def test_partly_cloudy_parallax_layers() -> None:
+    from atmos.scenes.partly_cloudy import PartlyCloudyScene
+    from atmos.weather.models import WeatherState
+
+    # Coverage >= 55 creates 2 bands (distant and foreground)
+    state = WeatherState(
+        location_name="Bangkok",
+        country_code="TH",
+        temperature=31.0,
+        feels_like=33.0,
+        humidity=65,
+        wind_speed=18.0,
+        wind_direction=90.0,
+        precipitation=0.0,
+        precipitation_probability=10.0,
+        cloud_coverage=70.0,
+        condition="partly_cloudy",
+        local_time=datetime(2026, 9, 7, 12, 0, 0),
+    )
+    scene = PartlyCloudyScene()
+    scene.enter(state)
+    scene.update(0.0, state, 80, 24)
+
+    assert len(scene.bands) == 2
+    distant_band, foreground_band = scene.bands[0], scene.bands[1]
+
+    # Distant (top) and foreground (lower) bands must use different layer speeds and depths
+    assert distant_band["layer"].speed < foreground_band["layer"].speed
+    assert distant_band["layer"].depth < foreground_band["layer"].depth
+    assert distant_band["layer"].speed == 0.25
+    assert distant_band["layer"].depth == 0.25
+    assert foreground_band["layer"].speed == 0.5
+    assert foreground_band["layer"].depth == 0.5
+
+    # Reset positions to test movement
+    distant_band["x"] = 0.0
+    foreground_band["x"] = 0.0
+
+    scene.update(1.0, state, 80, 24)
+    assert distant_band["x"] < foreground_band["x"]
