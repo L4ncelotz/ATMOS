@@ -16,6 +16,43 @@ from datetime import datetime
 
 import pytest
 
+
+def test_terminal_context_restores_screen_when_cbreak_init_fails(
+    monkeypatch, capsys
+) -> None:
+    import atmos.engine.terminal as terminal_mod
+
+    class FakeCbreak:
+        def __init__(self) -> None:
+            self.exit_called = False
+
+        def __enter__(self):
+            raise RuntimeError("cbreak unavailable")
+
+        def __exit__(self, exc_type, exc, tb) -> None:
+            self.exit_called = True
+
+    cbreak = FakeCbreak()
+
+    class FakeTerminal:
+        width = 80
+        height = 24
+
+        def cbreak(self):
+            return cbreak
+
+    monkeypatch.setattr(terminal_mod.blessed, "Terminal", FakeTerminal)
+
+    with terminal_mod.TerminalContext() as context:
+        assert context.ok is False
+
+    output = capsys.readouterr().out
+    assert terminal_mod._ENTER_ALT in output
+    assert terminal_mod._HIDE_CURSOR in output
+    assert terminal_mod._SHOW_CURSOR in output
+    assert terminal_mod._EXIT_ALT in output
+    assert cbreak.exit_called is True
+
 # --- input parsing (regression: location-typing ate letter keys) ---
 
 
