@@ -640,3 +640,102 @@ def test_fog_draws_layer_characters_into_frame_buffer() -> None:
         for row in buf.cells
         for char, style in row
     )
+
+
+def test_fog_layers_move_at_different_speeds() -> None:
+    from atmos.scenes.fog import FogScene
+    from atmos.weather.models import WeatherState
+
+    state = WeatherState(
+        location_name="Seattle",
+        country_code="US",
+        temperature=12.0,
+        feels_like=12.0,
+        humidity=98,
+        wind_speed=15.0,
+        wind_direction=90.0,
+        precipitation=0.0,
+        precipitation_probability=0.0,
+        cloud_coverage=80.0,
+        condition="fog",
+        local_time=datetime(2026, 9, 7, 21, 0, 0),
+    )
+    scene = FogScene()
+    scene.enter(state)
+    scene.update(0.0, state, 80, 24)
+    assert len(scene.layers) >= 3
+
+    # Reset positions to a known baseline to avoid wrapping during update
+    for layer in scene.layers:
+        layer["x"] = 0.0
+
+    scene.update(1.0, state, 80, 24)
+
+    # Lower-index layers (distant, top) must drift less than higher-index layers (foreground, bottom)
+    for i in range(len(scene.layers) - 1):
+        assert scene.layers[i]["layer"].speed < scene.layers[i + 1]["layer"].speed
+        assert scene.layers[i]["x"] < scene.layers[i + 1]["x"]
+
+
+def test_environment_state_initialized_from_weather() -> None:
+    from atmos.engine.environment import EnvironmentState
+    from atmos.weather.models import WeatherState
+
+    weather = WeatherState(
+        location_name="Seattle",
+        country_code="US",
+        temperature=12.0,
+        feels_like=12.0,
+        humidity=98,
+        wind_speed=15.0,
+        wind_direction=180.0,
+        precipitation=5.0,
+        precipitation_probability=80.0,
+        cloud_coverage=75.0,
+        condition="rain",
+        local_time=datetime(2026, 9, 7, 21, 0, 0),
+    )
+    env = EnvironmentState.from_weather(weather)
+    assert 0.0 <= env.cloud_intensity <= 1.0
+    assert 0.0 <= env.precipitation_intensity <= 1.0
+    assert 0.0 <= env.wind_intensity <= 1.0
+    assert 0.0 <= env.fog_intensity <= 1.0
+    assert env.cloud_intensity == pytest.approx(0.75)
+    assert env.precipitation_intensity == pytest.approx(0.5)
+    assert env.wind_intensity == pytest.approx(0.5)
+    assert env.fog_intensity == 0.0
+
+    fog_weather = weather.model_copy(update={"condition": "fog", "cloud_coverage": 90.0})
+    fog_env = EnvironmentState.from_weather(fog_weather)
+    assert fog_env.fog_intensity == pytest.approx(0.9)
+
+
+def test_cloud_bands_move_at_different_speeds() -> None:
+    from atmos.scenes.cloudy import CloudyScene
+    from atmos.weather.models import WeatherState
+
+    state = WeatherState(
+        location_name="Bangkok",
+        country_code="TH",
+        temperature=29.0,
+        feels_like=31.0,
+        humidity=68,
+        wind_speed=12.0,
+        wind_direction=90.0,
+        precipitation=0.0,
+        precipitation_probability=10.0,
+        cloud_coverage=80.0,
+        condition="cloudy",
+        local_time=datetime(2026, 9, 7, 12, 0, 0),
+    )
+    scene = CloudyScene()
+    scene.enter(state)
+    scene.update(0.0, state, 80, 24)
+    assert len(scene.bands) >= 2
+
+    for b in scene.bands:
+        b["x"] = 0.0
+
+    scene.update(1.0, state, 80, 24)
+    assert scene.bands[0]["layer"].speed < scene.bands[-1]["layer"].speed
+    assert scene.bands[0]["x"] < scene.bands[-1]["x"]

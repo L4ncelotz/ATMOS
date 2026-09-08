@@ -6,6 +6,7 @@ import math
 import random
 
 from atmos.engine.frame_buffer import FrameBuffer
+from atmos.engine.layers import Layer
 from atmos.engine.lighting import LightingState
 from atmos.scenes._atmosphere import Stars, draw_moon, draw_stars, draw_sun, init_stars
 from atmos.scenes.base import SceneBase
@@ -49,7 +50,8 @@ class PartlyCloudyScene(SceneBase):
         if not self.bands or len(self.bands) != target_bands:
             self._init_bands(target_bands, width, height, weather.cloud_coverage)
         for b in self.bands:
-            b["x"] += drift * dt
+            layer_speed = b["layer"].speed if "layer" in b else 1.0
+            b["x"] += drift * layer_speed * dt
             if drift >= 0 and b["x"] > width:
                 b["x"] = -b["length"]
             elif drift < 0 and b["x"] + b["length"] < 0:
@@ -71,14 +73,21 @@ class PartlyCloudyScene(SceneBase):
         self.bands = []
         upper = max(4, int(height * 0.55))
         positions = [upper // 3, (upper * 2) // 3] if count >= 2 else [upper // 2]
-        for y in positions[:count]:
+        for i, y in enumerate(positions[:count]):
             length, sprite = _band(width, coverage, self._rng)
+            if count == 1:
+                layer = Layer(speed=0.35, depth=0.35)
+            elif i == 0:
+                layer = Layer(speed=0.25, depth=0.25)
+            else:
+                layer = Layer(speed=0.5, depth=0.5)
             self.bands.append(
                 {
                     "x": self._rng.uniform(-length, max(1, width - 1)),
                     "y": y,
                     "length": length,
                     "sprite": sprite,
+                    "layer": layer,
                 }
             )
 
