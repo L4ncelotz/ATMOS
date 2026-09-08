@@ -58,13 +58,16 @@ class TerminalContext:
             sys.stdout.write(_HIDE_CURSOR)
             sys.stdout.write(_RESET_SGR)
             sys.stdout.flush()
+            # The terminal state has been changed even though cbreak has not
+            # been entered yet.  Mark this before cbreak initialization so a
+            # failure below still restores the alternate screen and cursor.
+            self._entered = True
             # Disable canonical input and terminal echo while ATMOS owns the
             # screen. Without cbreak, typed characters can be echoed into the
             # animation instead of being consumed by InputManager. The
             # context is explicitly closed in __exit__ to restore the shell.
             self._cbreak = self.term.cbreak()
             self._cbreak.__enter__()
-            self._entered = True
             self.ok = True
         except Exception as exc:  # noqa: BLE001
             sys.stderr.write(f"atmos: terminal init failed: {exc}\n")
