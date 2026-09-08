@@ -11,7 +11,9 @@ from __future__ import annotations
 import math
 import random
 
+from atmos.engine.environment import EnvironmentState
 from atmos.engine.frame_buffer import FrameBuffer
+from atmos.engine.layers import Layer
 from atmos.engine.lighting import LightingPhase, LightingState
 from atmos.scenes.base import SceneBase
 from atmos.weather.models import WeatherState
@@ -78,12 +80,14 @@ class CloudyScene(SceneBase):
         # Clouds drift a bit faster than scene visualization but slower than rain.
         drift = math.sin(rad) * (weather.wind_speed / 12.0)
 
-        # Coverage → number of bands (0..5).
-        target_bands = max(0, min(5, int(weather.cloud_coverage / 20.0)))
+        # Environment state cloud intensity → number of bands (0..5).
+        env = EnvironmentState.from_weather(weather)
+        target_bands = max(0, min(5, int(env.cloud_intensity * 5.0)))
         if not self.bands or len(self.bands) != target_bands:
             self._init_bands(target_bands, width, height, weather.cloud_coverage)
         for b in self.bands:
-            b["x"] += drift * dt
+            layer_speed = b["layer"].speed if "layer" in b else 1.0
+            b["x"] += drift * layer_speed * dt
             if drift >= 0 and b["x"] > width:
                 b["x"] = -b["length"]
             elif drift < 0 and b["x"] + b["length"] < 0:
@@ -97,19 +101,26 @@ class CloudyScene(SceneBase):
             # Keep the formations inside the upper sky and leave enough
             # vertical separation for their four sprite rows.
             available = max(1, upper - 4)
-            y = 2 + (available * i) // max(1, count - 1)
+            y = 2 + (available * i) // max(1, count - 1) if count > 1 else 2
+            if count <= 1:
+                layer = Layer(speed=0.35, depth=0.35)
+            elif i / (count - 1) < 0.5:
+                layer = Layer(speed=0.25, depth=0.25)
+            else:
+                layer = Layer(speed=0.5, depth=0.5)
             self.bands.append(
                 {
                     "x": self._rng.uniform(-length, max(1, width - 1)),
                     "y": y,
                     "length": length,
                     "sprite": sprite,
+                    "layer": layer,
                 }
             )
 
     @staticmethod
     def _palette(
-        lighting: LightingState | None, layer: int, dim: float
+        lighting: LightingState | None, depth: float, dim: float
     ) -> tuple[str, str, str, str]:
         """Return styles for cloud top, puffs, body, and underside."""
         if dim < 1.0:
@@ -127,8 +138,8 @@ class CloudyScene(SceneBase):
         else:
             palette = ("bright_white", "white", "blue", "white")
 
-        # Higher clouds sit farther away and are slightly quieter.
-        if layer % 2:
+        # Higher/distant clouds sit farther away and are slightly quieter.
+        if depth < 0.4:
             return (palette[1], palette[2], palette[2], palette[3])
         return palette
 
@@ -138,7 +149,7 @@ class CloudyScene(SceneBase):
         lighting: LightingState | None = None,
         dim: float = 1.0,
     ) -> None:
-        for layer, b in enumerate(self.bands):
+        for b in self.bands:
             start_x = int(b["x"])
             y = b["y"]
             if y < 0 or y >= buf.height:
@@ -149,7 +160,8 @@ class CloudyScene(SceneBase):
                 for i, ch in enumerate(line):
                     x = start_x + i
                     if ch != " " and 0 <= x < buf.width:
-                        style = self._palette(lighting, layer, dim)[row]
+                        depth = b["layer"].depth if "layer" in b else 0.5
+                        style = self._palette(lighting, depth, dim)[row]
                         buf.set(y + row, x, ch, style)
 
     def exit(self) -> None:

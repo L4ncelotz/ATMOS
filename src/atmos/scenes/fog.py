@@ -11,7 +11,9 @@ from __future__ import annotations
 import math
 import random
 
+from atmos.engine.environment import EnvironmentState
 from atmos.engine.frame_buffer import FrameBuffer
+from atmos.engine.layers import Layer
 from atmos.scenes.base import SceneBase
 from atmos.weather.models import WeatherState
 
@@ -36,12 +38,15 @@ class FogScene(SceneBase):
         rad = math.radians(weather.wind_direction)
         drift = math.sin(rad) * max(0.4, weather.wind_speed / 25.0)
 
-        # Coverage → number + thickness of layers.
-        target = max(3, min(8, int(weather.cloud_coverage / 12)))
+        # Environment state → number + thickness of layers.
+        env = EnvironmentState.from_weather(weather)
+        fog_density = env.fog_intensity if env.fog_intensity > 0 else env.cloud_intensity
+        target = max(3, min(8, int(fog_density * 8)))
         if not self.layers or len(self.layers) != target:
             self._init_layers(target, width, height)
         for layer in self.layers:
-            layer["x"] += drift * dt
+            layer_speed = layer["layer"].speed if "layer" in layer else 1.0
+            layer["x"] += drift * layer_speed * dt
             if drift >= 0 and layer["x"] > width:
                 layer["x"] = -layer["length"]
             elif drift < 0 and layer["x"] + layer["length"] < 0:
@@ -57,12 +62,16 @@ class FogScene(SceneBase):
             length = self._rng.randint(max(8, width // 6), max(12, width // 3))
             chars = ["─"] * length
             y = top + (span * i) // max(1, count - 1) if count > 1 else (top + bottom) // 2
+            ratio = i / (count - 1) if count > 1 else 0.5
+            speed = 0.4 + 0.4 * ratio
+            depth = 0.5 + 0.5 * ratio
             self.layers.append(
                 {
                     "x": self._rng.uniform(-length, max(1, width - 1)),
                     "y": y,
                     "length": length,
                     "chars": chars,
+                    "layer": Layer(speed=speed, depth=depth),
                 }
             )
 
@@ -76,7 +85,9 @@ class FogScene(SceneBase):
             y = int(layer["y"])
             if y < 0 or y >= buf.height:
                 continue
+            depth = layer["layer"].depth if "layer" in layer else 1.0
+            style = "238" if depth < 0.75 else "240"
             for offset, char in enumerate(layer["chars"]):
                 x = start_x + offset
                 if 0 <= x < buf.width and char != " ":
-                    buf.set(y, x, char, "240")
+                    buf.set(y, x, char, style)
