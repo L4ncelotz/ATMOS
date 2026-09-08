@@ -157,6 +157,43 @@ def test_global_shortcuts_change_loop_state() -> None:
     _handle_global(_parse("q"), loop=loop, refresher=refresher)
     assert loop.stopped is True
 
+def test_location_mode_preserves_action_letters_as_text() -> None:
+    from atmos.app import _handle_global
+    from atmos.engine.input import _parse
+
+    class FakeLoop:
+        target_fps = 30
+        stopped = False
+
+        def stop(self) -> None:
+            self.stopped = True
+
+    class FakeRefresher:
+        refresh_requested = False
+
+        def request_refresh(self) -> None:
+            self.refresh_requested = True
+
+    loop = FakeLoop()
+    refresher = FakeRefresher()
+
+    _handle_global(
+        _parse("q"),
+        loop=loop,
+        refresher=refresher,
+        allow_action_chars=False,
+    )
+
+    _handle_global(
+        _parse("r"),
+        loop=loop,
+        refresher=refresher,
+        allow_action_chars=False,
+    )
+
+    assert loop.stopped is False
+    assert refresher.refresh_requested is False
+
 
 def test_demo_disables_network_shortcuts() -> None:
     from atmos.app import _activate_location_search, _handle_global

@@ -199,11 +199,17 @@ def _handle_global(
     loop: AnimationLoop,
     refresher: WeatherRefresher,
     allow_network: bool = True,
+    allow_action_chars: bool = True,
 ) -> bool:
     if key is None:
         return False
+
     action = key.action
-    if action == "char" and key.char is not None:
+    if (
+        allow_action_chars
+        and action == "char"
+        and key.char is not None
+    ):
         action = action_for_char(key.char.lower())
 
     if action == "quit":
@@ -215,6 +221,7 @@ def _handle_global(
         loop.target_fps = max(5, loop.target_fps - 5)
     elif action == "refresh" and allow_network:
         refresher.request_refresh()
+
     return False
 
 
@@ -370,6 +377,7 @@ def _run_ambient_loop(
                     loop=loop,
                     refresher=refresher,
                     allow_network=not demo,
+                    allow_action_chars=mode != Mode.LOCATION,
                 ):
                     return
                 elif key.action == "space":
