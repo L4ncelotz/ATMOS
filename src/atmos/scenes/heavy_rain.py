@@ -10,7 +10,9 @@ from __future__ import annotations
 import math
 import random
 
+from atmos.engine.environment import EnvironmentState
 from atmos.engine.frame_buffer import FrameBuffer
+from atmos.engine.layout import scene_floor_y
 from atmos.engine.particles import Particle, ParticleSystem
 from atmos.scenes.base import SceneBase
 from atmos.weather.models import WeatherState
@@ -29,23 +31,77 @@ class HeavyRainScene(SceneBase):
     def __init__(self) -> None:
         self.rain = ParticleSystem()
         self.splash = ParticleSystem()
+        self.ripples: list[dict] = []
         self.width = 0
         self.height = 0
+        self.floor_y: int | None = None
         self.spawn_cooldown = 0.0
         self._rng = random.Random()
-
     def enter(self, weather: WeatherState) -> None:
         self.weather = weather
         self.rain.clear()
         self.splash.clear()
+        self.ripples = []
         self._rng = random.Random(weather.location_name + "_heavy")
-
-    def update(self, dt: float, weather: WeatherState, width: int, height: int, lighting: "LightingState | None" = None) -> None:
+    def update(
+        self,
+        dt: float,
+        weather: WeatherState,
+        width: int,
+        height: int,
+        lighting: "LightingState | None" = None,
+        floor_y: int | None = None,
+    ) -> None:
         self.width = width
         self.height = height
+        if floor_y is None:
+            floor_y = self.floor_y if self.floor_y is not None else scene_floor_y(height)
+        self.floor_y = floor_y
+
+        env = EnvironmentState.from_weather(weather)
+
+        # Detect heavy raindrops reaching ground to spawn splashes and ripples
+        ground_y = max(0, min(height - 1, floor_y))
+        max_splash = 45
+        max_ripples = min(30, max(5, int(width * 0.25)))
+        splash_chance = 0.35 + 0.45 * env.precipitation_intensity
+        ripple_chance = 0.30 + 0.40 * env.precipitation_intensity
+        for p in self.rain.particles:
+            if p.y + p.vy * dt >= ground_y and 0 <= p.x < width:
+                # Spawn upward bouncing splash droplets
+                if len(self.splash.particles) < max_splash and self._rng.random() < splash_chance:
+                    self.splash.spawn(
+                        Particle(
+                            x=p.x,
+                            y=float(ground_y),
+                            vx=self._rng.uniform(-2.5, 2.5),
+                            vy=self._rng.uniform(-7.0, -14.0),
+                            age=0.0,
+                            lifetime=self._rng.uniform(0.12, 0.25),
+                            char=self._rng.choice(["^", "'", "·", "°"]),
+                        )
+                    )
+                # Spawn puddle ripple
+                if len(self.ripples) < max_ripples and self._rng.random() < ripple_chance:
+                    self.ripples.append(
+                        {
+                            "x": int(p.x),
+                            "y": ground_y,
+                            "age": 0.0,
+                            "lifetime": self._rng.uniform(0.3, 0.5),
+                        }
+                    )
+
+        # Advance ripples
+        alive_ripples: list[dict] = []
+        for r in self.ripples:
+            r["age"] += dt
+            if r["age"] < r["lifetime"] and r["y"] < height:
+                alive_ripples.append(r)
+        self.ripples = alive_ripples
+
         self.rain.step(dt, width, height)
         self.splash.step(dt, width, height)
-
         rad = math.radians(weather.wind_direction)
         wind_vx = math.sin(rad) * (weather.wind_speed / 6.0)
         wind_vx = max(-7.0, min(7.0, wind_vx))
@@ -80,12 +136,42 @@ class HeavyRainScene(SceneBase):
                     )
                 )
 
-    def draw(self, buf: FrameBuffer, lighting: "LightingState | None" = None, dim: float = 1.0) -> None:
+    def draw(
+        self,
+        buf: FrameBuffer,
+        lighting: "LightingState | None" = None,
+        dim: float = 1.0,
+        floor_y: int | None = None,
+    ) -> None:
         rain_style = "bright_blue" if dim >= 1.0 else "240"
         splash_style = "blue" if dim >= 1.0 else "240"
         self.rain.draw(buf, rain_style)
         self.splash.draw(buf, splash_style)
 
+        # Ground puddle ripples
+        ripple_style = "cyan" if dim >= 1.0 else "240"
+        for r in self.ripples:
+            x = r["x"]
+            y = r["y"]
+            if y < 0 or y >= buf.height:
+                continue
+            progress = r["age"] / r["lifetime"] if r["lifetime"] > 0 else 1.0
+            if progress < 0.3:
+                if 0 <= x < buf.width:
+                    buf.set(y, x, "·", splash_style)
+            elif progress < 0.7:
+                # Stronger ripple: (≈)
+                if 0 <= x - 1 < buf.width:
+                    buf.set(y, x - 1, "(", ripple_style)
+                if 0 <= x < buf.width:
+                    buf.set(y, x, "≈", ripple_style)
+                if 0 <= x + 1 < buf.width:
+                    buf.set(y, x + 1, ")", ripple_style)
+            else:
+                if 0 <= x < buf.width:
+                    buf.set(y, x, "≈", ripple_style)
+
     def exit(self) -> None:
         self.rain.clear()
         self.splash.clear()
+        self.ripples = []
