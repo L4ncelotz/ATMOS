@@ -11,10 +11,10 @@ import math
 import random
 
 from atmos.engine.frame_buffer import FrameBuffer
+from atmos.engine.layout import scene_floor_y
 from atmos.engine.particles import Particle, ParticleSystem
 from atmos.scenes.base import SceneBase
 from atmos.weather.models import WeatherState
-
 
 _SNOW_CHARS = ("·", "*", "+")
 
@@ -25,6 +25,7 @@ class SnowScene(SceneBase):
         self.accumulation: list[float] = []
         self.width = 0
         self.height = 0
+        self.floor_y: int | None = None
         self.spawn_cooldown = 0.0
         self._rng = random.Random()
 
@@ -33,31 +34,41 @@ class SnowScene(SceneBase):
         self.system.clear()
         self.accumulation = []
         self._rng = random.Random(weather.location_name + "_snow")
-    def update(self, dt: float, weather: WeatherState, width: int, height: int, lighting: "LightingState | None" = None) -> None:
+    def update(
+        self,
+        dt: float,
+        weather: WeatherState,
+        width: int,
+        height: int,
+        lighting: "LightingState | None" = None,
+        floor_y: int | None = None,
+    ) -> None:
         self.width = width
         self.height = height
+        if floor_y is None:
+            floor_y = self.floor_y if self.floor_y is not None else scene_floor_y(height)
+        self.floor_y = floor_y
 
-        # Ensure ground accumulation array matches current width
+        # Safe resize handling: preserve existing accumulation if resizing
         if len(self.accumulation) != width:
-            self.accumulation = [0.0] * width
+            if not self.accumulation:
+                self.accumulation = [0.0] * width
+            elif len(self.accumulation) < width:
+                self.accumulation.extend([0.0] * (width - len(self.accumulation)))
+            else:
+                self.accumulation = self.accumulation[:width]
 
-        # Detect snow landing on the ground to build accumulation
-        ground_y = max(0, height - 1)
+        # Detect snow landing on the ground floor to build accumulation slowly
+        ground_y = max(0, min(height - 1, floor_y))
         for p in self.system.particles:
             if p.y + p.vy * dt >= ground_y and 0 <= p.x < width:
                 col = int(p.x)
                 if 0 <= col < width:
-                    self.accumulation[col] = min(1.0, self.accumulation[col] + 0.12)
+                    self.accumulation[col] = min(1.0, self.accumulation[col] + 0.04)
                     if col > 0:
-                        self.accumulation[col - 1] = min(1.0, self.accumulation[col - 1] + 0.03)
+                        self.accumulation[col - 1] = min(1.0, self.accumulation[col - 1] + 0.01)
                     if col < width - 1:
-                        self.accumulation[col + 1] = min(1.0, self.accumulation[col + 1] + 0.03)
-
-        # Slow decay / settling over time
-        decay = dt * 0.015
-        for i in range(len(self.accumulation)):
-            if self.accumulation[i] > 0.0:
-                self.accumulation[i] = max(0.0, self.accumulation[i] - decay)
+                        self.accumulation[col + 1] = min(1.0, self.accumulation[col + 1] + 0.01)
 
         self.system.step(dt, width, height)
 
@@ -90,13 +101,21 @@ class SnowScene(SceneBase):
                     )
                 )
 
-    def draw(self, buf: FrameBuffer, lighting: "LightingState | None" = None, dim: float = 1.0) -> None:
+    def draw(
+        self,
+        buf: FrameBuffer,
+        lighting: "LightingState | None" = None,
+        dim: float = 1.0,
+        floor_y: int | None = None,
+    ) -> None:
         style = "white" if dim >= 1.0 else "240"
         self.system.draw(buf, style)
 
-        # Ground snow accumulation
+        # Ground snow accumulation rendered at layout-aware floor_y
+        if floor_y is None:
+            floor_y = self.floor_y if self.floor_y is not None else scene_floor_y(buf.height)
+        ground_row = max(0, min(buf.height - 1, floor_y))
         if buf.height > 0 and self.accumulation:
-            ground_row = buf.height - 1
             for x, depth in enumerate(self.accumulation[:buf.width]):
                 if depth >= 0.65:
                     buf.set(ground_row, x, "_", style)
@@ -108,3 +127,4 @@ class SnowScene(SceneBase):
     def exit(self) -> None:
         self.system.clear()
         self.accumulation = []
+        self.floor_y = None

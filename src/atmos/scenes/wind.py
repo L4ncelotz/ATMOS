@@ -17,10 +17,11 @@ from __future__ import annotations
 import math
 import random
 
+from atmos.engine.environment import EnvironmentState
 from atmos.engine.frame_buffer import FrameBuffer
+from atmos.engine.layout import scene_floor_y
 from atmos.scenes.base import SceneBase
 from atmos.weather.models import WeatherState
-
 _DEBRIS_CHARS = ("·", "•", "°", "'", "~", "*", ",")
 
 class WindScene(SceneBase):
@@ -31,8 +32,8 @@ class WindScene(SceneBase):
         self._rng = random.Random()
         self.width = 0
         self.height = 0
+        self.floor_y: int | None = None
         self.spawn_cooldown = 0.0
-
     def enter(self, weather: WeatherState) -> None:
         self.weather = weather
         self.streaks = []
@@ -40,15 +41,26 @@ class WindScene(SceneBase):
         self.debris_spawn_cooldown = 0.0
         self._rng = random.Random(weather.location_name + "_wind")
         self.spawn_cooldown = 0.0
-    def update(self, dt: float, weather: WeatherState, width: int, height: int, lighting: "LightingState | None" = None) -> None:
+    def update(
+        self,
+        dt: float,
+        weather: WeatherState,
+        width: int,
+        height: int,
+        lighting: "LightingState | None" = None,
+        floor_y: int | None = None,
+    ) -> None:
         self.width = width
         self.height = height
+        if floor_y is None:
+            floor_y = self.floor_y if self.floor_y is not None else scene_floor_y(height)
+        self.floor_y = floor_y
+        env = EnvironmentState.from_weather(weather)
 
         # Map wind direction → horizontal velocity. Sign by sin(rad).
         rad = math.radians(weather.wind_direction)
         sign = 1.0 if math.sin(rad) >= 0 else -1.0
         speed = max(8.0, min(50.0, weather.wind_speed * 1.6))
-
         # Spawn new streaks proportional to wind speed.
         self.spawn_cooldown -= dt
         spawn_interval = max(0.03, 0.18 - weather.wind_speed / 200.0)
@@ -66,17 +78,20 @@ class WindScene(SceneBase):
                     "lifetime": 3.0,
                 }
             )
-        # Spawn ambient debris carried by wind gusts
-        target_debris = max(3, min(14, int(weather.wind_speed / 2.5)))
+        # Spawn ambient debris carried by wind gusts, driven by wind_intensity
+        target_debris = max(2, min(14, int(env.wind_intensity * 14.0)))
+        debris_speed_mult = 0.7 + 0.5 * env.wind_intensity
+        debris_speed = speed * debris_speed_mult
+
         self.debris_spawn_cooldown -= dt
         if self.debris_spawn_cooldown <= 0:
-            self.debris_spawn_cooldown = max(0.08, 0.35 - weather.wind_speed / 150.0)
+            self.debris_spawn_cooldown = max(0.06, 0.40 - env.wind_intensity * 0.30)
             if len(self.debris) < target_debris:
                 self.debris.append(
                     {
                         "x": -1.0 if sign > 0 else float(width),
                         "y": self._rng.uniform(2, max(2, height - 3)),
-                        "vx": sign * speed * self._rng.uniform(0.65, 1.1),
+                        "vx": sign * debris_speed * self._rng.uniform(0.85, 1.15),
                         "vy": self._rng.uniform(-0.8, 0.8),
                         "char": self._rng.choice(_DEBRIS_CHARS),
                         "age": 0.0,
@@ -84,7 +99,6 @@ class WindScene(SceneBase):
                         "flutter_phase": self._rng.uniform(0.0, 6.28),
                     }
                 )
-
         # Advance streaks.
         alive: list[dict] = []
         for s in self.streaks:
@@ -118,13 +132,18 @@ class WindScene(SceneBase):
                 continue
             alive_debris.append(d)
         self.debris = alive_debris
-    def draw(self, buf: FrameBuffer, lighting: "LightingState | None" = None, dim: float = 1.0) -> None:
+    def draw(
+        self,
+        buf: FrameBuffer,
+        lighting: "LightingState | None" = None,
+        dim: float = 1.0,
+        floor_y: int | None = None,
+    ) -> None:
         # Wind is already drawn in dim grey; honor `dim` for
         # blend-out by suppressing when near 0.
         if dim <= 0.0:
             return
         for s in self.streaks:
-
             start_x = int(s["x"])
             y = int(s["y"])
             if y < 0 or y >= buf.height:

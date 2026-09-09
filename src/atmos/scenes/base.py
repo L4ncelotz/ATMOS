@@ -18,12 +18,14 @@ class BaseScene(Protocol):
         width: int,
         height: int,
         lighting: LightingState | None = None,
+        floor_y: int | None = None,
     ) -> None: ...
     def draw(
         self,
         buf: FrameBuffer,
         lighting: LightingState | None = None,
         dim: float = 1.0,
+        floor_y: int | None = None,
     ) -> None: ...
     def exit(self) -> None: ...
 
@@ -41,6 +43,7 @@ class SceneBase:
         width: int,
         height: int,
         lighting: LightingState | None = None,
+        floor_y: int | None = None,
     ) -> None:
         return
 
@@ -49,6 +52,10 @@ class SceneBase:
         buf: FrameBuffer,
         lighting: LightingState | None = None,
         dim: float = 1.0,
+        floor_y: int | None = None,
     ) -> None:
+        return
+
+    def exit(self) -> None:
         return
 

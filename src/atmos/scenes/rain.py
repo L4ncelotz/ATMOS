@@ -11,7 +11,9 @@ from __future__ import annotations
 import math
 import random
 
+from atmos.engine.environment import EnvironmentState
 from atmos.engine.frame_buffer import FrameBuffer
+from atmos.engine.layout import scene_floor_y
 from atmos.engine.particles import Particle, ParticleSystem
 from atmos.scenes.base import SceneBase
 from atmos.weather.models import WeatherState
@@ -36,6 +38,7 @@ class RainScene(SceneBase):
         self.ripples: list[dict] = []
         self.width = 0
         self.height = 0
+        self.floor_y: int | None = None
         self.spawn_cooldown = 0.0
         self._rng = random.Random()
 
@@ -44,16 +47,30 @@ class RainScene(SceneBase):
         self.system.clear()
         self.ripples = []
         self._rng = random.Random(weather.location_name)
-    def update(self, dt: float, weather: WeatherState, width: int, height: int, lighting: "LightingState | None" = None) -> None:
+    def update(
+        self,
+        dt: float,
+        weather: WeatherState,
+        width: int,
+        height: int,
+        lighting: "LightingState | None" = None,
+        floor_y: int | None = None,
+    ) -> None:
         self.width = width
         self.height = height
+        if floor_y is None:
+            floor_y = self.floor_y if self.floor_y is not None else scene_floor_y(height)
+        self.floor_y = floor_y
+
+        env = EnvironmentState.from_weather(weather)
 
         # Detect raindrops landing on the ground to spawn ripples
-        ground_y = max(0, height - 1)
-        max_ripples = min(25, max(4, int(width * 0.2)))
+        ground_y = max(0, min(height - 1, floor_y))
+        reaction_chance = 0.25 + 0.5 * env.precipitation_intensity
+        max_ripples = min(25, max(4, int(width * 0.15 + env.precipitation_intensity * 10)))
         for p in self.system.particles:
             if p.y + p.vy * dt >= ground_y and 0 <= p.x < width:
-                if len(self.ripples) < max_ripples and self._rng.random() < 0.45:
+                if len(self.ripples) < max_ripples and self._rng.random() < reaction_chance:
                     self.ripples.append(
                         {
                             "x": int(p.x),
@@ -62,7 +79,6 @@ class RainScene(SceneBase):
                             "lifetime": self._rng.uniform(0.35, 0.55),
                         }
                     )
-
         # Advance ripples
         alive_ripples: list[dict] = []
         for r in self.ripples:
@@ -107,7 +123,13 @@ class RainScene(SceneBase):
                 )
 
 
-    def draw(self, buf: FrameBuffer, lighting: "LightingState | None" = None, dim: float = 1.0) -> None:
+    def draw(
+        self,
+        buf: FrameBuffer,
+        lighting: "LightingState | None" = None,
+        dim: float = 1.0,
+        floor_y: int | None = None,
+    ) -> None:
         style = "blue" if dim >= 1.0 else "240"
         self.system.draw(buf, style)
 

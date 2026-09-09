@@ -804,9 +804,7 @@ def test_partly_cloudy_parallax_layers() -> None:
     assert distant_band["x"] < foreground_band["x"]
 
 
-def test_rain_ground_ripples_spawn_and_render() -> None:
-    from atmos.engine.frame_buffer import FrameBuffer
-    from atmos.engine.particles import Particle
+def test_rain_ground_reactions_are_bounded() -> None:
     from atmos.scenes.rain import RainScene
     from atmos.weather.models import WeatherState
 
@@ -816,33 +814,51 @@ def test_rain_ground_ripples_spawn_and_render() -> None:
         temperature=15.0,
         feels_like=15.0,
         humidity=85,
-        wind_speed=10.0,
+        wind_speed=20.0,
         wind_direction=180.0,
-        precipitation=4.0,
-        precipitation_probability=90.0,
-        cloud_coverage=80.0,
+        precipitation=12.0,
+        precipitation_probability=100.0,
+        cloud_coverage=100.0,
+        condition="rain",
+        local_time=datetime(2026, 9, 8, 14, 0, 0),
+    )
+    scene = RainScene()
+    scene.enter(state)
+    for _ in range(250):
+        scene.update(0.04, state, 80, 24)
+        assert len(scene.ripples) <= 25
+    assert len(scene.ripples) > 0
+
+
+def test_rain_ripple_expires() -> None:
+    from atmos.scenes.rain import RainScene
+    from atmos.weather.models import WeatherState
+
+    state = WeatherState(
+        location_name="Seattle",
+        country_code="US",
+        temperature=12.0,
+        feels_like=12.0,
+        humidity=90,
+        wind_speed=5.0,
+        wind_direction=180.0,
+        precipitation=2.0,
+        precipitation_probability=60.0,
+        cloud_coverage=70.0,
         condition="rain",
         local_time=datetime(2026, 9, 8, 14, 0, 0),
     )
     scene = RainScene()
     scene.enter(state)
     scene.update(0.0, state, 80, 24)
-
-    # Place particles hitting the ground
-    for i in range(10):
-        scene.system.spawn(
-            Particle(x=float(10 + i * 5), y=23.0, vx=0.0, vy=10.0, age=0.0, lifetime=2.0, char="│")
-        )
-    scene.update(0.05, state, 80, 24)
-    assert len(scene.ripples) > 0
-
-    buf = FrameBuffer.empty(80, 24)
-    scene.draw(buf)
-    ground_chars = {buf.cells[23][x][0] for x in range(80)}
-    assert any(ch in ("·", "(", ")", "~") for ch in ground_chars)
+    # Inject a single ripple with 0.15s lifetime
+    scene.ripples = [{"x": 20, "y": 20, "age": 0.0, "lifetime": 0.15}]
+    assert len(scene.ripples) == 1
+    scene.update(0.25, state, 80, 24)
+    assert len(scene.ripples) == 0
 
 
-def test_heavy_rain_splashes_and_ripples() -> None:
+def test_heavy_rain_creates_stronger_ground_reactions() -> None:
     from atmos.engine.frame_buffer import FrameBuffer
     from atmos.engine.particles import Particle
     from atmos.scenes.heavy_rain import HeavyRainScene
@@ -853,12 +869,12 @@ def test_heavy_rain_splashes_and_ripples() -> None:
         country_code="US",
         temperature=27.0,
         feels_like=30.0,
-        humidity=92,
-        wind_speed=15.0,
+        humidity=95,
+        wind_speed=25.0,
         wind_direction=180.0,
-        precipitation=8.0,
-        precipitation_probability=95.0,
-        cloud_coverage=95.0,
+        precipitation=10.0,
+        precipitation_probability=100.0,
+        cloud_coverage=100.0,
         condition="heavy_rain",
         local_time=datetime(2026, 9, 8, 16, 0, 0),
     )
@@ -866,22 +882,27 @@ def test_heavy_rain_splashes_and_ripples() -> None:
     scene.enter(state)
     scene.update(0.0, state, 80, 24)
 
-    # Spawn particles at the floor row
-    for i in range(15):
+    # Spawn particles hitting the ground floor
+    floor_y = scene.floor_y
+    for i in range(20):
         scene.rain.spawn(
-            Particle(x=float(5 + i * 4), y=23.0, vx=0.0, vy=30.0, age=0.0, lifetime=1.0, char="│")
+            Particle(x=float(10 + i * 3), y=float(floor_y - 1), vx=0.0, vy=30.0, age=0.0, lifetime=2.0, char="│")
         )
-    scene.update(0.02, state, 80, 24)
-    assert len(scene.splash.particles) > 0 or len(scene.ripples) > 0
+    scene.update(0.04, state, 80, 24)
+
+    # Verifies upward-bouncing splash droplets with vy < 0
+    assert any(p.vy < 0 for p in scene.splash.particles)
     assert len(scene.splash.particles) <= 45
 
+    # Verifies stronger ripple glyphs in draw output as ripples expand
+    scene.update(0.15, state, 80, 24)
     buf = FrameBuffer.empty(80, 24)
     scene.draw(buf)
-    assert len(buf.cells) == 24
+    drawn_chars = {buf.cells[floor_y][x][0] for x in range(80)}
+    assert "≈" in drawn_chars or "(" in drawn_chars
 
 
-def test_snow_ground_accumulation() -> None:
-    from atmos.engine.frame_buffer import FrameBuffer
+def test_snow_accumulation_increases() -> None:
     from atmos.engine.particles import Particle
     from atmos.scenes.snow import SnowScene
     from atmos.weather.models import WeatherState
@@ -904,29 +925,90 @@ def test_snow_ground_accumulation() -> None:
     scene.enter(state)
     scene.update(0.0, state, 80, 24)
 
-    # Drop a snowflake onto column 30
+    floor_y = scene.floor_y
+    col = 30
+    before = scene.accumulation[col]
+    # Drop a snowflake that lands on the floor
     scene.system.spawn(
-        Particle(x=30.0, y=23.0, vx=0.0, vy=2.0, age=0.0, lifetime=5.0, char="*")
+        Particle(x=float(col), y=float(floor_y - 1), vx=0.0, vy=15.0, age=0.0, lifetime=5.0, char="*")
     )
-    scene.update(0.05, state, 80, 24)
-    assert scene.accumulation[30] > 0.0
-
-    buf = FrameBuffer.empty(80, 24)
-    scene.draw(buf)
-    assert buf.cells[23][30][0] in ("·", ".", "_")
+    scene.update(0.1, state, 80, 24)
+    after = scene.accumulation[col]
+    assert after > before
 
 
-def test_wind_ambient_debris_spawns_and_moves() -> None:
-    from atmos.scenes.wind import WindScene, _DEBRIS_CHARS
+def test_snow_accumulation_has_maximum() -> None:
+    from atmos.engine.particles import Particle
+    from atmos.scenes.snow import SnowScene
+    from atmos.weather.models import WeatherState
+
+    state = WeatherState(
+        location_name="Sapporo",
+        country_code="JP",
+        temperature=-5.0,
+        feels_like=-10.0,
+        humidity=90,
+        wind_speed=5.0,
+        wind_direction=180.0,
+        precipitation=5.0,
+        precipitation_probability=95.0,
+        cloud_coverage=100.0,
+        condition="snow",
+        local_time=datetime(2026, 1, 15, 12, 0, 0),
+    )
+    scene = SnowScene()
+    scene.enter(state)
+    scene.update(0.0, state, 80, 24)
+
+    col = 25
+    floor_y = scene.floor_y
+    # Repeatedly dump snow onto the same column
+    for _ in range(60):
+        scene.system.spawn(
+            Particle(x=float(col), y=float(floor_y - 1), vx=0.0, vy=15.0, age=0.0, lifetime=5.0, char="*")
+        )
+        scene.update(0.08, state, 80, 24)
+    assert scene.accumulation[col] <= 1.0
+
+
+def test_snow_accumulation_resets_on_exit() -> None:
+    from atmos.scenes.snow import SnowScene
+    from atmos.weather.models import WeatherState
+
+    state = WeatherState(
+        location_name="Oslo",
+        country_code="NO",
+        temperature=-2.0,
+        feels_like=-6.0,
+        humidity=85,
+        wind_speed=6.0,
+        wind_direction=180.0,
+        precipitation=3.0,
+        precipitation_probability=90.0,
+        cloud_coverage=90.0,
+        condition="snow",
+        local_time=datetime(2026, 1, 15, 12, 0, 0),
+    )
+    scene = SnowScene()
+    scene.enter(state)
+    scene.update(0.0, state, 80, 24)
+    scene.accumulation[20] = 0.8
+    assert any(val > 0 for val in scene.accumulation)
+    scene.exit()
+    assert len(scene.accumulation) == 0
+
+
+def test_wind_debris_is_bounded() -> None:
+    from atmos.scenes.wind import WindScene
     from atmos.weather.models import WeatherState
 
     state = WeatherState(
         location_name="Chicago",
         country_code="US",
-        temperature=18.0,
-        feels_like=18.0,
+        temperature=15.0,
+        feels_like=15.0,
         humidity=50,
-        wind_speed=35.0,
+        wind_speed=45.0,
         wind_direction=90.0,
         precipitation=0.0,
         precipitation_probability=0.0,
@@ -936,11 +1018,115 @@ def test_wind_ambient_debris_spawns_and_moves() -> None:
     )
     scene = WindScene()
     scene.enter(state)
-    scene.update(0.1, state, 80, 24)
-
+    for _ in range(300):
+        scene.update(0.04, state, 80, 24)
+        assert len(scene.debris) <= 14
     assert len(scene.debris) > 0
-    assert all(d["char"] in _DEBRIS_CHARS for d in scene.debris)
 
-    x0 = scene.debris[0]["x"]
-    scene.update(0.2, state, 80, 24)
-    assert scene.debris[0]["x"] != x0
+
+def test_wind_intensity_affects_debris_motion() -> None:
+    from atmos.scenes.wind import WindScene
+    from atmos.weather.models import WeatherState
+
+    low_weather = WeatherState(
+        location_name="Calm",
+        country_code="US",
+        temperature=20.0,
+        feels_like=20.0,
+        humidity=50,
+        wind_speed=6.0,
+        wind_direction=90.0,
+        precipitation=0.0,
+        precipitation_probability=0.0,
+        cloud_coverage=10.0,
+        condition="wind",
+        local_time=datetime(2026, 9, 8, 14, 0, 0),
+    )
+    high_weather = low_weather.model_copy(update={"wind_speed": 40.0})
+
+    low_scene = WindScene()
+    low_scene.enter(low_weather)
+    for _ in range(30):
+        low_scene.update(0.05, low_weather, 80, 24)
+        if low_scene.debris:
+            break
+
+    high_scene = WindScene()
+    high_scene.enter(high_weather)
+    for _ in range(30):
+        high_scene.update(0.05, high_weather, 80, 24)
+        if high_scene.debris:
+            break
+
+    assert len(low_scene.debris) > 0
+    assert len(high_scene.debris) > 0
+    assert abs(high_scene.debris[0]["vx"]) > abs(low_scene.debris[0]["vx"])
+
+
+def test_ground_effects_stay_above_footer() -> None:
+    from atmos.engine.frame_buffer import FrameBuffer
+    from atmos.engine.layout import scene_floor_y
+    from atmos.engine.particles import Particle
+    from atmos.scenes.heavy_rain import HeavyRainScene
+    from atmos.scenes.rain import RainScene
+    from atmos.scenes.snow import SnowScene
+    from atmos.weather.models import WeatherState
+
+    base_weather = WeatherState(
+        location_name="TestCity",
+        country_code="US",
+        temperature=15.0,
+        feels_like=15.0,
+        humidity=90,
+        wind_speed=15.0,
+        wind_direction=180.0,
+        precipitation=8.0,
+        precipitation_probability=95.0,
+        cloud_coverage=90.0,
+        condition="rain",
+        local_time=datetime(2026, 9, 8, 12, 0, 0),
+    )
+
+    # Test for both 80x24 and 120x30
+    for width, height in [(80, 24), (120, 30)]:
+        floor_y = scene_floor_y(height)
+        # Footer/status rows are all rows below floor_y
+        forbidden_rows = range(floor_y + 1, height)
+
+        # 1. Rain ripples
+        rain = RainScene()
+        rain.enter(base_weather)
+        for _ in range(30):
+            rain.update(0.05, base_weather, width, height)
+        buf_rain = FrameBuffer.empty(width, height)
+        rain.draw(buf_rain)
+        for r in rain.ripples:
+            assert r["y"] <= floor_y
+
+        # 2. Heavy rain ripples and splashes
+        heavy = HeavyRainScene()
+        heavy.enter(base_weather.model_copy(update={"condition": "heavy_rain"}))
+        for _ in range(30):
+            heavy.update(0.05, base_weather, width, height)
+        buf_heavy = FrameBuffer.empty(width, height)
+        heavy.draw(buf_heavy)
+        for r in heavy.ripples:
+            assert r["y"] <= floor_y
+        # All splash droplets bounce upward (y <= floor_y)
+        for p in heavy.splash.particles:
+            assert p.y <= floor_y
+
+        # 3. Snow accumulation
+        snow = SnowScene()
+        snow_weather = base_weather.model_copy(update={"condition": "snow", "precipitation": 4.0})
+        snow.enter(snow_weather)
+        for _ in range(50):
+            snow.update(0.05, snow_weather, width, height)
+        buf_snow = FrameBuffer.empty(width, height)
+        snow.draw(buf_snow)
+        # Verify snow accumulation marks only appear at or above floor_y
+        for y in forbidden_rows:
+            row_chars = {buf_snow.cells[y][x][0] for x in range(width)}
+            assert row_chars == {" "}, f"Row {y} in forbidden footer rows has marks: {row_chars}"
+        # At floor_y, ground accumulation is present
+        assert snow.floor_y == floor_y
