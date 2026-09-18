@@ -17,6 +17,12 @@ MIN_W = 60
 MIN_H = 20
 
 
+def scene_floor_y(height: int) -> int:
+    """Derive the scene ground floor row from terminal height, above status and footer UI."""
+    cy = height // 2
+    info_y = cy + 2
+    status_y = max(info_y + 3, height - 2)
+    return status_y - 2
 @dataclass
 class Layout:
     width: int
@@ -38,6 +44,10 @@ class Layout:
         # Leave room for info + status rows.
         return max(self.particle_area_top + 1, self.info_y - 2)
 
+    @property
+    def floor_y(self) -> int:
+        """Scene floor row, positioned above the status and footer area."""
+        return self.status_y - 2
 
 @dataclass
 class LayoutTooSmall(Layout):

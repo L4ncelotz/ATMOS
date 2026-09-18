@@ -485,6 +485,10 @@ def _run_ambient_loop(
             )
             if transition.active:
                 if transition.from_scene is not None and transition.to_scene is not None:
+                    if hasattr(transition.from_scene, "floor_y"):
+                        transition.from_scene.floor_y = lay.floor_y
+                    if hasattr(transition.to_scene, "floor_y"):
+                        transition.to_scene.floor_y = lay.floor_y
                     transition.from_scene.update(
                         dt, effective_state, lay.width, lay.height, current_lighting
                     )
@@ -503,6 +507,8 @@ def _run_ambient_loop(
             buf = FrameBuffer.empty(lay.width, lay.height)
 
             if mode == Mode.AMBIENT:
+                if hasattr(scene, "floor_y"):
+                    scene.floor_y = lay.floor_y
                 if not paused:
                     scene.update(
                         dt, effective_state, lay.width, lay.height, current_lighting
@@ -515,7 +521,7 @@ def _run_ambient_loop(
                 else:
                     scene.draw(buf, current_lighting, dim=1.0)
                 if not minimal and lay.height >= 21:
-                    companion.draw(buf, floor_y=lay.status_y - 2)
+                    companion.draw(buf, floor_y=lay.floor_y)
                 draw_info(buf, lay, effective_state)
                 if not minimal:
                     draw_status(buf, lay, effective_state)

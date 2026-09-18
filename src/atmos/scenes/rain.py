@@ -11,7 +11,9 @@ from __future__ import annotations
 import math
 import random
 
+from atmos.engine.environment import EnvironmentState
 from atmos.engine.frame_buffer import FrameBuffer
+from atmos.engine.layout import scene_floor_y
 from atmos.engine.particles import Particle, ParticleSystem
 from atmos.scenes.base import SceneBase
 from atmos.weather.models import WeatherState
@@ -33,19 +35,58 @@ def _lerp(a: float, b: float, t: float) -> float:
 class RainScene(SceneBase):
     def __init__(self) -> None:
         self.system = ParticleSystem()
+        self.ripples: list[dict] = []
         self.width = 0
         self.height = 0
+        self.floor_y: int | None = None
         self.spawn_cooldown = 0.0
         self._rng = random.Random()
 
     def enter(self, weather: WeatherState) -> None:
         self.weather = weather
         self.system.clear()
+        self.ripples = []
         self._rng = random.Random(weather.location_name)
-
-    def update(self, dt: float, weather: WeatherState, width: int, height: int, lighting: "LightingState | None" = None) -> None:
+    def update(
+        self,
+        dt: float,
+        weather: WeatherState,
+        width: int,
+        height: int,
+        lighting: "LightingState | None" = None,
+        floor_y: int | None = None,
+    ) -> None:
         self.width = width
         self.height = height
+        if floor_y is None:
+            floor_y = self.floor_y if self.floor_y is not None else scene_floor_y(height)
+        self.floor_y = floor_y
+
+        env = EnvironmentState.from_weather(weather)
+
+        # Detect raindrops landing on the ground to spawn ripples
+        ground_y = max(0, min(height - 1, floor_y))
+        reaction_chance = 0.25 + 0.5 * env.precipitation_intensity
+        max_ripples = min(25, max(4, int(width * 0.15 + env.precipitation_intensity * 10)))
+        for p in self.system.particles:
+            if p.y + p.vy * dt >= ground_y and 0 <= p.x < width:
+                if len(self.ripples) < max_ripples and self._rng.random() < reaction_chance:
+                    self.ripples.append(
+                        {
+                            "x": int(p.x),
+                            "y": ground_y,
+                            "age": 0.0,
+                            "lifetime": self._rng.uniform(0.35, 0.55),
+                        }
+                    )
+        # Advance ripples
+        alive_ripples: list[dict] = []
+        for r in self.ripples:
+            r["age"] += dt
+            if r["age"] < r["lifetime"] and r["y"] < height:
+                alive_ripples.append(r)
+        self.ripples = alive_ripples
+
         self.system.step(dt, width, height)
         # Density scales with precipitation. Vy kept constant so particle
         # lifetime in screen-space stays predictable.
@@ -82,9 +123,41 @@ class RainScene(SceneBase):
                 )
 
 
-    def draw(self, buf: FrameBuffer, lighting: "LightingState | None" = None, dim: float = 1.0) -> None:
+    def draw(
+        self,
+        buf: FrameBuffer,
+        lighting: "LightingState | None" = None,
+        dim: float = 1.0,
+        floor_y: int | None = None,
+    ) -> None:
         style = "blue" if dim >= 1.0 else "240"
         self.system.draw(buf, style)
 
+        # Ground ripples and splash reactions
+        ripple_style = "bright_blue" if dim >= 1.0 else "240"
+        for r in self.ripples:
+            x = r["x"]
+            y = r["y"]
+            if y < 0 or y >= buf.height:
+                continue
+            progress = r["age"] / r["lifetime"] if r["lifetime"] > 0 else 1.0
+            if progress < 0.3:
+                # Impact point
+                if 0 <= x < buf.width:
+                    buf.set(y, x, "·", ripple_style)
+            elif progress < 0.7:
+                # Puddle ripple expanding: ( )
+                if 0 <= x - 1 < buf.width:
+                    buf.set(y, x - 1, "(", ripple_style)
+                if 0 <= x < buf.width:
+                    buf.set(y, x, " ", ripple_style)
+                if 0 <= x + 1 < buf.width:
+                    buf.set(y, x + 1, ")", ripple_style)
+            else:
+                # Settling ripple
+                if 0 <= x < buf.width:
+                    buf.set(y, x, "~", ripple_style)
+
     def exit(self) -> None:
         self.system.clear()
+        self.ripples = []
